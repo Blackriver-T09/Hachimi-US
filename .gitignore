@@ -1,0 +1,27 @@
+# Ignore sensitive files
+config.py
+
+# Ignore reference folder
+reference/
+
+# Ignore contents of specific directories but keep the directory structure
+bullet/*
+!bullet/.gitkeep
+
+figures/*
+!figures/.gitkeep
+
+music/*
+!music/.gitkeep
+
+videos/*
+!videos/.gitkeep
+
+db/*
+!db/.gitkeep
+
+# Python specific ignores
+__pycache__/
+*.py[cod]
+*$py.class
+.env
