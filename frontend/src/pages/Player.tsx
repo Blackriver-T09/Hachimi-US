@@ -14,7 +14,12 @@ import {
   ExternalLink,
   ChevronLeft,
   Video as VideoIcon,
-  Music
+  Music,
+  Volume2,
+  VolumeX,
+  Repeat,
+  Repeat1,
+  Shuffle
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
@@ -36,6 +41,9 @@ const Player = () => {
   const durationRef = useRef(0)
   const [viewMode, setViewMode] = useState<'browse' | 'playing'>('browse')
   const [bgMode, setBgMode] = useState<'blur' | 'video'>('blur')
+  const [volume, _setVolume] = useState(1) // 0 to 1 (setVolume reserved for future volume slider)
+  const [isMuted, setIsMuted] = useState(false)
+  const [playMode, setPlayMode] = useState<'loop' | 'loop-one' | 'shuffle'>('loop') // loop all, loop one, shuffle
   
   // DOM Refs for direct updates to bypass React re-renders
   const progressLineRef = useRef<HTMLDivElement>(null)
@@ -111,6 +119,9 @@ const Player = () => {
       audioRef.current.load();
       
       audioRef.current.src = `http://127.0.0.1:5000/static/music/${currentVideo.id}.mp3`
+      // Apply current volume settings
+      audioRef.current.volume = isMuted ? 0 : volume
+      
       if (bgMode === 'video' && videoRef.current) {
         videoRef.current.pause();
         videoRef.current.removeAttribute('src');
@@ -129,6 +140,13 @@ const Player = () => {
       }
     }
   }, [currentVideo])
+
+  // Separate effect for volume control - only updates volume, doesn't reload track
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume
+    }
+  }, [isMuted, volume])
 
   useEffect(() => {
     if (bgMode === 'video' && currentVideo && videoRef.current && audioRef.current) {
@@ -531,18 +549,44 @@ const Player = () => {
   };
 
   const handleEnded = () => {
-    setIsPlaying(false)
     if (videos.length === 0 || !currentVideo) return
     
-    const currentIndex = videos.findIndex(v => v.id === currentVideo.id)
-    if (currentIndex < videos.length - 1) {
-      setCurrentVideo(videos[currentIndex + 1])
-      setIsPlaying(true)
+    // Loop one: replay current song
+    if (playMode === 'loop-one') {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0
+        audioRef.current.play()
+      }
+      return
     }
+    
+    // Shuffle: pick random song
+    if (playMode === 'shuffle') {
+      const randomIndex = Math.floor(Math.random() * videos.length)
+      setCurrentVideo(videos[randomIndex])
+      setIsPlaying(true)
+      return
+    }
+    
+    // Loop all: go to next song, wrap around
+    const currentIndex = videos.findIndex(v => v.id === currentVideo.id)
+    const nextIndex = (currentIndex + 1) % videos.length
+    setCurrentVideo(videos[nextIndex])
+    setIsPlaying(true)
   }
 
   const playNext = () => {
     if (!currentVideo || videos.length === 0) return
+    
+    // Shuffle mode: pick random song
+    if (playMode === 'shuffle') {
+      const randomIndex = Math.floor(Math.random() * videos.length)
+      setCurrentVideo(videos[randomIndex])
+      setIsPlaying(true)
+      return
+    }
+    
+    // Normal/loop mode: go to next song
     const currentIndex = videos.findIndex(v => v.id === currentVideo.id)
     const nextIndex = (currentIndex + 1) % videos.length
     setCurrentVideo(videos[nextIndex])
@@ -551,6 +595,16 @@ const Player = () => {
 
   const playPrev = () => {
     if (!currentVideo || videos.length === 0) return
+    
+    // Shuffle mode: pick random song
+    if (playMode === 'shuffle') {
+      const randomIndex = Math.floor(Math.random() * videos.length)
+      setCurrentVideo(videos[randomIndex])
+      setIsPlaying(true)
+      return
+    }
+    
+    // Normal/loop mode: go to previous song
     const currentIndex = videos.findIndex(v => v.id === currentVideo.id)
     const prevIndex = (currentIndex - 1 + videos.length) % videos.length
     setCurrentVideo(videos[prevIndex])
@@ -850,6 +904,23 @@ const Player = () => {
               animationFillMode: 'forwards'
             } : {}}
           >
+            {/* Volume Control */}
+            <button 
+              onClick={() => {
+                if (isMuted) {
+                  setIsMuted(false)
+                  if (audioRef.current) audioRef.current.volume = volume
+                } else {
+                  setIsMuted(true)
+                  if (audioRef.current) audioRef.current.volume = 0
+                }
+              }}
+              onMouseMove={handleButtonMouseMove}
+              className="glow-button w-12 h-12 rounded-full backdrop-blur-xl text-white/80 hover:text-white flex items-center justify-center hover:scale-110 shadow-2xl transition"
+            >
+              {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+            </button>
+
             <button 
               onClick={playPrev} 
               onMouseMove={handleButtonMouseMove}
@@ -870,6 +941,20 @@ const Player = () => {
               className="glow-button w-14 h-14 rounded-full backdrop-blur-xl text-white flex items-center justify-center hover:scale-110 shadow-2xl"
             >
               <SkipForward size={24} fill="currentColor" />
+            </button>
+
+            {/* Play Mode Toggle */}
+            <button 
+              onClick={() => {
+                if (playMode === 'loop') setPlayMode('loop-one')
+                else if (playMode === 'loop-one') setPlayMode('shuffle')
+                else setPlayMode('loop')
+              }}
+              onMouseMove={handleButtonMouseMove}
+              className="glow-button w-12 h-12 rounded-full backdrop-blur-xl text-white/80 hover:text-white flex items-center justify-center hover:scale-110 shadow-2xl transition"
+              title={playMode === 'loop' ? 'Loop All' : playMode === 'loop-one' ? 'Loop One' : 'Shuffle'}
+            >
+              {playMode === 'loop' ? <Repeat size={20} /> : playMode === 'loop-one' ? <Repeat1 size={20} /> : <Shuffle size={20} />}
             </button>
           </div>
         </div>
