@@ -41,7 +41,7 @@ const Player = () => {
   // Use refs for progress and duration to prevent re-renders
   const progressRef = useRef(0)
   const durationRef = useRef(0)
-  const [viewMode, setViewMode] = useState<'browse' | 'playing'>('browse')
+  const [viewMode, setViewMode] = useState<'browse' | 'playing' | 'favorites'>('browse')
   const [bgMode, setBgMode] = useState<'blur' | 'video'>('blur')
   const [volume, _setVolume] = useState(1) // 0 to 1 (setVolume reserved for future volume slider)
   const [isMuted, setIsMuted] = useState(false)
@@ -81,7 +81,7 @@ const Player = () => {
   // Canvas ref for constellation layer (replaces SVG for performance)
   const constellationCanvasRef = useRef<HTMLCanvasElement>(null)
   // Track viewMode in a ref so the rAF closure always sees the latest value
-  const viewModeRef = useRef<'browse' | 'playing'>('browse')
+  const viewModeRef = useRef<'browse' | 'playing' | 'favorites'>('browse')
   // Store star positions in memory instead of reading from DOM
   const starPositions = useRef<{x: number, y: number, opacity: number, r: number, g: number, b: number, alpha: number}[]>(
     Array.from({length: 64}, () => ({x: 0, y: 0, opacity: 0, r: 168, g: 85, b: 247, alpha: 0.5}))
@@ -1124,8 +1124,13 @@ const Player = () => {
               <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"><Menu size={16} /></div>
               <span className="font-medium">Playlists</span>
             </button>
-            <button className="w-full flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition">
-              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"><Heart size={16} /></div>
+            <button 
+              onClick={() => setViewMode('favorites')}
+              className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition ${viewMode === 'favorites' ? 'bg-zinc-800/40 text-white border-l-2 border-purple-500' : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-white'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${viewMode === 'favorites' ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5'}`}>
+                <Heart size={16} />
+              </div>
               <span className="font-medium">Favorites</span>
             </button>
           </div>
@@ -1166,14 +1171,15 @@ const Player = () => {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar text-left w-full max-w-7xl mx-auto">
-          <div className="mb-12 text-left">
-            <div className="flex justify-between items-end mb-8 text-left">
-              <h2 className="text-3xl font-bold text-white tracking-tight">Recent Scrapes</h2>
-              <button className="text-sm font-medium text-purple-400 hover:text-purple-300 transition">See all</button>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 text-left">
-              {videos.map(video => (
+          {viewMode === 'browse' && (
+            <div className="mb-12 text-left">
+              <div className="flex justify-between items-end mb-8 text-left">
+                <h2 className="text-3xl font-bold text-white tracking-tight">Recent Scrapes</h2>
+                <button className="text-sm font-medium text-purple-400 hover:text-purple-300 transition">See all</button>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 text-left">
+                {videos.map(video => (
                 <div 
                   key={video.id}
                   onClick={() => {
@@ -1264,6 +1270,162 @@ const Player = () => {
               )}
             </div>
           </div>
+          )}
+
+          {viewMode === 'favorites' && (
+            <div className="mb-12 text-left">
+              <div className="flex justify-between items-end mb-8 text-left animate-[float-up_0.6s_ease-out]">
+                <h2 className="text-3xl font-bold text-white tracking-tight">Top Favorites</h2>
+                <span className="text-sm font-medium text-zinc-400">{videos.length} songs</span>
+              </div>
+
+              {/* Podium for Top 3 */}
+              {videos.filter(v => v.likes > 0).length >= 3 && (
+                <div className="mb-12 flex items-end justify-center gap-6">
+                  {/* 2nd Place */}
+                  <div className="flex flex-col items-center animate-[float-up_0.8s_ease-out_0.3s_both]">
+                    <div className="relative group cursor-pointer" onClick={() => {
+                      const secondPlace = [...videos].sort((a, b) => b.likes - a.likes)[1]
+                      setCurrentVideo(secondPlace)
+                      setIsPlaying(true)
+                      setViewMode('playing')
+                    }}>
+                      <div className="w-32 h-32 rounded-2xl overflow-hidden mb-3 border-4 border-zinc-400 shadow-lg shadow-zinc-400/30">
+                        <img 
+                          src={`http://127.0.0.1:5000/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[1].id}.jpg`}
+                          alt="2nd place"
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                      </div>
+                      <div className="text-center">
+                        <div className="text-6xl mb-2">🥈</div>
+                        <p className="text-sm font-bold text-zinc-300 truncate w-32">{[...videos].sort((a, b) => b.likes - a.likes)[1].title}</p>
+                        <p className="text-xs text-zinc-500 mt-1">♥ {[...videos].sort((a, b) => b.likes - a.likes)[1].likes} likes</p>
+                      </div>
+                    </div>
+                    <div className="w-32 h-24 bg-gradient-to-t from-zinc-700 to-zinc-600 rounded-t-xl flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                      2
+                    </div>
+                  </div>
+
+                  {/* 1st Place */}
+                  <div className="flex flex-col items-center -mt-8 animate-[float-up_0.8s_ease-out_0.15s_both]">
+                    <div className="relative group cursor-pointer" onClick={() => {
+                      const firstPlace = [...videos].sort((a, b) => b.likes - a.likes)[0]
+                      setCurrentVideo(firstPlace)
+                      setIsPlaying(true)
+                      setViewMode('playing')
+                    }}>
+                      <div className="w-40 h-40 rounded-2xl overflow-hidden mb-3 border-4 border-yellow-400 shadow-xl shadow-yellow-400/50 ring-4 ring-yellow-400/20">
+                        <img 
+                          src={`http://127.0.0.1:5000/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[0].id}.jpg`}
+                          alt="1st place"
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                      </div>
+                      <div className="text-center">
+                        <div className="text-7xl mb-2">🏆</div>
+                        <p className="text-base font-bold text-yellow-400 truncate w-40">{[...videos].sort((a, b) => b.likes - a.likes)[0].title}</p>
+                        <p className="text-sm text-yellow-500 mt-1">♥ {[...videos].sort((a, b) => b.likes - a.likes)[0].likes} likes</p>
+                      </div>
+                    </div>
+                    <div className="w-40 h-32 bg-gradient-to-t from-yellow-600 to-yellow-500 rounded-t-xl flex items-center justify-center text-4xl font-bold text-white shadow-xl">
+                      1
+                    </div>
+                  </div>
+
+                  {/* 3rd Place */}
+                  <div className="flex flex-col items-center animate-[float-up_0.8s_ease-out_0.45s_both]">
+                    <div className="relative group cursor-pointer" onClick={() => {
+                      const thirdPlace = [...videos].sort((a, b) => b.likes - a.likes)[2]
+                      setCurrentVideo(thirdPlace)
+                      setIsPlaying(true)
+                      setViewMode('playing')
+                    }}>
+                      <div className="w-32 h-32 rounded-2xl overflow-hidden mb-3 border-4 border-amber-700 shadow-lg shadow-amber-700/30">
+                        <img 
+                          src={`http://127.0.0.1:5000/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[2].id}.jpg`}
+                          alt="3rd place"
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                      </div>
+                      <div className="text-center">
+                        <div className="text-6xl mb-2">🥉</div>
+                        <p className="text-sm font-bold text-zinc-300 truncate w-32">{[...videos].sort((a, b) => b.likes - a.likes)[2].title}</p>
+                        <p className="text-xs text-zinc-500 mt-1">♥ {[...videos].sort((a, b) => b.likes - a.likes)[2].likes} likes</p>
+                      </div>
+                    </div>
+                    <div className="w-32 h-20 bg-gradient-to-t from-amber-800 to-amber-700 rounded-t-xl flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                      3
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* All songs sorted by likes */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 text-left">
+                {[...videos].sort((a, b) => b.likes - a.likes).map(video => (
+                <div 
+                  key={video.id}
+                  onClick={() => {
+                    setCurrentVideo(video)
+                    setIsPlaying(true)
+                    setViewMode('playing')
+                  }}
+                  className={`bg-[#252731] rounded-2xl p-4 cursor-pointer transition-all duration-300 group hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)] hover:-translate-y-1 border text-left ${
+                    currentVideo?.id === video.id ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-white/5 hover:border-white/10'
+                  }`}
+                >
+                  <div className="aspect-square rounded-xl overflow-hidden mb-4 relative bg-black/50">
+                    <img 
+                      src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`} 
+                      alt={video.title}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/shapes/svg?seed=${video.id}`
+                      }}
+                    />
+                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300 backdrop-blur-[2px] ${currentVideo?.id === video.id && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      <div className="w-14 h-14 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xl shadow-purple-600/50 hover:bg-purple-500 hover:scale-105 transition-all">
+                        {currentVideo?.id === video.id && isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-zinc-100 truncate text-base mb-1.5" title={video.title}>
+                    {video.title}
+                  </h3>
+                  <div className="flex justify-between items-center text-xs text-zinc-400 font-medium">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                        }}
+                        className="p-1.5 rounded-full hover:bg-white/10 transition opacity-60 hover:opacity-100"
+                        title="Add to Playlist"
+                      >
+                        <ListPlus size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => handleLike(video.id, e)}
+                        className={`p-1.5 rounded-full hover:bg-white/10 transition flex items-center gap-1 ${
+                          likedVideos.has(video.id) ? 'text-red-400' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        title={likedVideos.has(video.id) ? 'Unlike' : 'Like'}
+                      >
+                        <Heart size={16} fill={likedVideos.has(video.id) ? 'currentColor' : 'none'} />
+                        <span className="text-xs">{video.likes}</span>
+                      </button>
+                    </div>
+                    <span className="shrink-0 bg-black/30 px-2 py-1 rounded text-zinc-300">
+                      {currentVideo?.id === video.id ? formatTime(durationRef.current) : '00:00'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
