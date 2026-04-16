@@ -13,6 +13,14 @@ class Video(Base):
     source_url = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class OnlineStats(Base):
+    __tablename__ = 'online_stats'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    online_count = Column(Integer, nullable=False)
+    peak_count = Column(Integer, nullable=False)  # Peak count for this day
+
 # Ensure database directory exists
 os.makedirs('db', exist_ok=True)
 

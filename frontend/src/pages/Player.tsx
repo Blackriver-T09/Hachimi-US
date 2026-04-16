@@ -45,6 +45,11 @@ const Player = () => {
   const [isMuted, setIsMuted] = useState(false)
   const [playMode, setPlayMode] = useState<'loop' | 'loop-one' | 'shuffle'>('loop') // loop all, loop one, shuffle
   
+  // Session ID for online tracking
+  const sessionIdRef = useRef<string>(
+    `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+  )
+  
   // DOM Refs for direct updates to bypass React re-renders
   const progressLineRef = useRef<HTMLDivElement>(null)
   const progressThumbRef = useRef<HTMLDivElement>(null)
@@ -109,6 +114,25 @@ const Player = () => {
       }
     }
     fetchVideos()
+    
+    // Send heartbeat to track online users
+    const sendHeartbeat = async () => {
+      try {
+        await axios.post('http://127.0.0.1:5000/api/heartbeat', {
+          session_id: sessionIdRef.current
+        })
+      } catch (err) {
+        // Silently fail - heartbeat is not critical
+      }
+    }
+    
+    // Send initial heartbeat
+    sendHeartbeat()
+    
+    // Send heartbeat every 10 seconds
+    const heartbeatInterval = setInterval(sendHeartbeat, 10000)
+    
+    return () => clearInterval(heartbeatInterval)
   }, [])
 
   useEffect(() => {
