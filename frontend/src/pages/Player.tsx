@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import { 
   Play, 
@@ -39,6 +38,7 @@ const Player = () => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoadingVideos, setIsLoadingVideos] = useState(true)
   const [videosError, setVideosError] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   // Use refs for progress and duration to prevent re-renders
   const progressRef = useRef(0)
   const durationRef = useRef(0)
@@ -94,8 +94,6 @@ const Player = () => {
   const starPositions = useRef<{x: number, y: number, opacity: number, r: number, g: number, b: number, alpha: number}[]>(
     Array.from({length: 64}, () => ({x: 0, y: 0, opacity: 0, r: 168, g: 85, b: 247, alpha: 0.5}))
   )
-
-  const navigate = useNavigate()
 
   // Keep viewModeRef in sync with viewMode state
   useEffect(() => {
@@ -714,6 +712,14 @@ const Player = () => {
     }
   }
 
+  // Filter videos based on search query
+  const filteredVideos = useMemo(() => {
+    if (!searchQuery.trim()) return videos
+    return videos.filter(video => 
+      video.title.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [videos, searchQuery])
+
   const playPrev = () => {
     if (!currentVideo || videos.length === 0) return
     
@@ -1190,6 +1196,8 @@ const Player = () => {
             <Input 
               type="text" 
               placeholder="Search" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 h-12 bg-white/5 border border-white/10 rounded-full text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-purple-500 focus-visible:bg-white/10 transition-all shadow-sm"
             />
           </div>
@@ -1200,12 +1208,12 @@ const Player = () => {
           {viewMode === 'browse' && (
             <div className="mb-12 text-left">
               <div className="flex justify-between items-end mb-8 text-left">
-                <h2 className="text-3xl font-bold text-white tracking-tight">Recent Scrapes</h2>
+                <h2 className="text-3xl font-bold text-white tracking-tight">Music Library</h2>
                 <button className="text-sm font-medium text-purple-400 hover:text-purple-300 transition">See all</button>
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 text-left">
-                {videos.map(video => (
+                {filteredVideos.map(video => (
                 <div 
                   key={video.id}
                   onClick={() => {
@@ -1282,13 +1290,23 @@ const Player = () => {
                 </div>
               )}
 
+              {!isLoadingVideos && !videosError && filteredVideos.length === 0 && videos.length > 0 && (
+                <div className="col-span-full h-64 flex flex-col items-center justify-center text-zinc-500 bg-[#252731] rounded-2xl border border-zinc-800 border-dashed">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                    <Search size={24} className="text-zinc-600" />
+                  </div>
+                  <p className="text-lg font-medium text-zinc-400">No results for "{searchQuery}"</p>
+                  <button onClick={() => setSearchQuery("")} className="text-purple-400 hover:text-purple-300 mt-2 text-sm font-medium px-4 py-2 bg-purple-500/10 rounded-full hover:bg-purple-500/20 transition">Clear search</button>
+                </div>
+              )}
+
               {!isLoadingVideos && !videosError && videos.length === 0 && (
                 <div className="col-span-full h-64 flex flex-col items-center justify-center text-zinc-500 bg-[#252731] rounded-2xl border border-zinc-800 border-dashed">
                   <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                     <Search size={24} className="text-zinc-600" />
                   </div>
                   <p className="text-lg font-medium text-zinc-400">No music found</p>
-                  <button onClick={() => navigate("/admin")} className="text-purple-400 hover:text-purple-300 mt-2 text-sm font-medium px-4 py-2 bg-purple-500/10 rounded-full hover:bg-purple-500/20 transition">Go to Admin panel to add some</button>
+                  <p className="text-sm text-zinc-500 mt-2">Add some music via the admin panel</p>
                 </div>
               )}
             </div>
