@@ -10,7 +10,6 @@ import {
   Search, 
   Grid, 
   Heart,
-  Settings,
   ExternalLink,
   ChevronLeft,
   Video as VideoIcon,
@@ -1178,24 +1177,7 @@ const Player = () => {
               <span className="font-medium">Favorites</span>
             </button>
           </div>
-
-          <div className="px-4 space-y-4 pt-4">
-            {['Favorite Track', 'Top Track', 'Playlist', 'Albums', 'Artists'].map(item => (
-              <a key={item} href="#" className="block text-sm font-medium text-zinc-500 hover:text-zinc-300 transition">{item}</a>
-            ))}
-          </div>
         </nav>
-
-        {/* Admin Link at Bottom */}
-        <div className="p-4 mt-auto mb-24">
-           <button 
-            onClick={() => navigate('/admin')}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:bg-zinc-800/50 hover:text-white transition border border-zinc-800"
-          >
-            <Settings size={16} />
-            <span className="text-sm font-medium">Admin Panel</span>
-          </button>
-        </div>
       </aside>
 
       {/* Browse Content Area */}
