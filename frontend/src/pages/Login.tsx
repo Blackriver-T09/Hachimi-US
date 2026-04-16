@@ -37,8 +37,15 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-zinc-900 border-zinc-800 text-zinc-100">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center text-purple-400">Hachimi Admin Login</CardTitle>
+        <CardHeader className="space-y-4">
+          <div className="flex justify-center">
+            <img 
+              src="/logo.png" 
+              alt="Hachimi Music" 
+              className="w-20 h-20 rounded-full object-cover shadow-lg shadow-purple-500/20"
+            />
+          </div>
+          <CardTitle className="text-2xl text-center text-purple-400">Hachimi Music Admin</CardTitle>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">

@@ -1053,10 +1053,12 @@ const Player = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-[#1f2129] flex flex-col pt-8 shrink-0 relative z-20">
         <div className="px-8 pb-8 flex items-center gap-3 font-bold text-xl text-white cursor-pointer" onClick={() => setViewMode('browse')}>
-          <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-            H
-          </div>
-          Hachimi
+          <img 
+            src="/logo.png" 
+            alt="Hachimi Music" 
+            className="w-14 h-14 rounded-full object-cover"
+          />
+          Hachimi Music
         </div>
 
         <nav className="space-y-6 px-4 flex-1">

@@ -187,7 +187,14 @@ const Admin = () => {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex justify-between items-center pb-6 border-b border-zinc-800">
-          <h1 className="text-3xl font-bold text-purple-400">Admin Dashboard</h1>
+          <div className="flex items-center gap-4">
+            <img 
+              src="/logo.png" 
+              alt="Hachimi Music" 
+              className="w-12 h-12 rounded-full object-cover shadow-lg shadow-purple-500/20"
+            />
+            <h1 className="text-3xl font-bold text-purple-400">Hachimi Music Admin</h1>
+          </div>
           <div className="flex gap-4">
             <Button variant="outline" onClick={() => navigate("/")} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
               View Player
