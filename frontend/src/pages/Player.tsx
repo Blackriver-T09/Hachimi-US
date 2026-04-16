@@ -14,7 +14,7 @@ import {
   ExternalLink,
   ChevronLeft,
   Video as VideoIcon,
-  Image as ImageIcon
+  Music
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
@@ -718,7 +718,7 @@ const Player = () => {
                   onClick={() => setBgMode('blur')}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium flex items-center gap-2 transition ${bgMode === 'blur' ? 'bg-purple-600 text-white shadow-md' : 'text-white/60 hover:text-white'}`}
                 >
-                  <ImageIcon size={14} /> Blur & Wave
+                  <Music size={14} /> Music
                 </button>
                 <button 
                   onClick={() => setBgMode('video')}
