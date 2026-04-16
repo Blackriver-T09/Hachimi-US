@@ -935,8 +935,8 @@ const Player = () => {
                   animationFillMode: 'forwards'
                 } : {}}
               >
-                {/* Outer Ring */}
-                <div className="absolute inset-4 border border-white/20 rounded-full" />
+                {/* Outer Ring with Glow */}
+                <div className="absolute inset-4 border-4 border-purple-500 rounded-full shadow-[0_0_30px_rgba(168,85,247,0.8),0_0_60px_rgba(168,85,247,0.5),0_0_90px_rgba(168,85,247,0.3)]" />
                 
                 {/* Constellation Canvas Layer (replaces SVG for performance) */}
                 <canvas 
@@ -1097,7 +1097,8 @@ const Player = () => {
                 animationDuration: '0.6s',
                 animationDelay: '1.2s',
                 animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                animationFillMode: 'forwards'
+                animationFillMode: 'forwards',
+                filter: 'drop-shadow(0 0 10px rgba(168,85,247,0.8)) drop-shadow(0 0 20px rgba(168,85,247,0.6)) drop-shadow(0 0 30px rgba(168,85,247,0.4))'
               }}
             >
               <circle 
@@ -1106,7 +1107,7 @@ const Player = () => {
                 r="180" 
                 fill="none" 
                 stroke="#a855f7" 
-                strokeWidth="3" 
+                strokeWidth="8" 
                 strokeLinecap="round"
                 style={{
                   transformOrigin: 'center',
