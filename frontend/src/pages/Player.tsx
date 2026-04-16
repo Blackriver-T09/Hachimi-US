@@ -1624,8 +1624,8 @@ const Player = () => {
         preload="none"
       />
 
-      {/* Bottom Mini Player Bar (Visible in browse view when something is selected) */}
-      <div className={`fixed bottom-0 left-0 right-0 h-24 bg-[#1f2129]/95 backdrop-blur-md border-t border-white/5 flex items-center px-6 z-[60] transition-transform duration-300 ${viewMode === 'browse' && currentVideo ? 'translate-y-0' : 'translate-y-full'}`}>
+      {/* Bottom Mini Player Bar (Visible in browse/favorites/playlists view when something is selected) */}
+      <div className={`fixed bottom-0 left-0 right-0 h-24 bg-[#1f2129]/95 backdrop-blur-md border-t border-white/5 flex items-center px-6 z-[60] transition-transform duration-300 ${viewMode !== 'playing' && currentVideo ? 'translate-y-0' : 'translate-y-full'}`}>
         
         {/* Left: Track Info */}
         <div className="flex items-center gap-4 w-[320px] shrink-0">
