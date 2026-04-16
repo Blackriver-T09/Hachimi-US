@@ -93,14 +93,42 @@ const Player = () => {
   }, [viewMode])
 
   useEffect(() => {
+    setIsLoadingVideos(true)
     const fetchVideos = async () => {
-      setIsLoadingVideos(true)
-      setVideosError("")
       try {
         const response = await axios.get("http://127.0.0.1:5000/api/videos")
         if (response.data.success) {
           // Only store metadata, don't preload any media files here
-          setVideos(response.data.data)
+          const videoList = response.data.data
+          setVideos(videoList)
+          
+          // Auto-play initial track if START_INDEX is configured
+          try {
+            const configResponse = await axios.get("http://127.0.0.1:5000/api/config")
+            if (configResponse.data.success && configResponse.data.start_index !== null) {
+              const startIndex = configResponse.data.start_index
+              // Find video by ID (not array index)
+              const initialVideo = videoList.find((v: Video) => v.id === startIndex)
+              if (initialVideo) {
+                setCurrentVideo(initialVideo)
+                setIsPlaying(true)
+                // Stay in browse view, don't switch to playing view
+                
+                // Try to auto-play immediately (may be blocked by browser)
+                setTimeout(() => {
+                  if (audioRef.current) {
+                    audioRef.current.play().catch(_err => {
+                      console.log("Auto-play blocked by browser, waiting for user interaction")
+                      // Browser blocked auto-play, will play when user interacts
+                    })
+                  }
+                }, 100)
+              }
+            }
+          } catch (configErr) {
+            // Silently ignore config fetch errors
+            console.log("No auto-play config found")
+          }
         } else {
           setVideos([])
           setVideosError("Failed to load song list.")

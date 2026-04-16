@@ -37,11 +37,13 @@ try:
     USERNAME = config.USERNAME
     PASSWORD = config.PASSWORD
     JWT_SECRET = config.API_KEY
+    START_INDEX = getattr(config, 'START_INDEX', None)
 except ImportError:
     print("Warning: config.py not found. Using default credentials.")
     USERNAME = "admin"
     PASSWORD = "password"
     JWT_SECRET = "fallback-secret-key-change-me"
+    START_INDEX = None
 
 def token_required(f):
     @wraps(f)
@@ -78,6 +80,14 @@ def login():
         return jsonify({'success': True, 'token': token})
     
     return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Get public configuration"""
+    return jsonify({
+        'success': True,
+        'start_index': START_INDEX
+    })
 
 @app.route('/api/videos', methods=['GET'])
 def get_videos():
