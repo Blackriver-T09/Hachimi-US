@@ -1254,12 +1254,12 @@ const Player = () => {
                     currentVideo?.id === video.id ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-white/5 hover:border-white/10'
                   }`}
                 >
-                  <div className="aspect-square rounded-xl overflow-hidden mb-4 relative bg-black/50">
+                  <div className="aspect-square mb-4 relative bg-black/50 rounded-xl overflow-hidden">
                     <img 
                       src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`} 
                       alt={video.title}
                       loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 will-change-transform"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/shapes/svg?seed=${video.id}`
                       }}
