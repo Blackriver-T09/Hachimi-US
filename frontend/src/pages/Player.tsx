@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import { 
@@ -29,10 +29,23 @@ const Player = () => {
   const [videos, setVideos] = useState<Video[]>([])
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [duration, setDuration] = useState(0)
+  const [isLoadingVideos, setIsLoadingVideos] = useState(true)
+  const [videosError, setVideosError] = useState("")
+  // Use refs for progress and duration to prevent re-renders
+  const progressRef = useRef(0)
+  const durationRef = useRef(0)
   const [viewMode, setViewMode] = useState<'browse' | 'playing'>('browse')
   const [bgMode, setBgMode] = useState<'blur' | 'video'>('blur')
+  
+  // DOM Refs for direct updates to bypass React re-renders
+  const progressLineRef = useRef<HTMLDivElement>(null)
+  const progressThumbRef = useRef<HTMLDivElement>(null)
+  const currentTimeLabelRef = useRef<HTMLSpanElement>(null)
+  const durationLabelRef = useRef<HTMLSpanElement>(null)
+  const miniProgressLineRef = useRef<HTMLDivElement>(null)
+  const miniCurrentTimeLabelRef = useRef<HTMLSpanElement>(null)
+  const miniDurationLabelRef = useRef<HTMLSpanElement>(null)
+  const waveformTimeLabelRef = useRef<HTMLParagraphElement>(null)
   
   const [showEntranceAnimation, setShowEntranceAnimation] = useState(false)
   
@@ -43,22 +56,48 @@ const Player = () => {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const animationFrameRef = useRef<number>(0)
   const barsRef = useRef<(HTMLDivElement | null)[]>([])
+  const waveformContainerRef = useRef<HTMLDivElement>(null)
   
-  // Refs for the new constellation layer
-  const starsRef = useRef<(SVGCircleElement | null)[]>([])
-  const linesRef = useRef<(SVGPathElement | null)[]>([])
+  // Canvas ref for constellation layer (replaces SVG for performance)
+  const constellationCanvasRef = useRef<HTMLCanvasElement>(null)
+  // Track viewMode in a ref so the rAF closure always sees the latest value
+  const viewModeRef = useRef<'browse' | 'playing'>('browse')
+  // Store star positions in memory instead of reading from DOM
+  const starPositions = useRef<{x: number, y: number, opacity: number, r: number, g: number, b: number, alpha: number}[]>(
+    Array.from({length: 64}, () => ({x: 200, y: 200, opacity: 0, r: 168, g: 85, b: 247, alpha: 0.5}))
+  )
 
   const navigate = useNavigate()
 
+  // Keep viewModeRef in sync with viewMode state
+  useEffect(() => {
+    viewModeRef.current = viewMode
+    // When leaving the playing view, stop the animation loop immediately
+    if (viewMode !== 'playing' && animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = 0
+    }
+  }, [viewMode])
+
   useEffect(() => {
     const fetchVideos = async () => {
+      setIsLoadingVideos(true)
+      setVideosError("")
       try {
         const response = await axios.get("http://127.0.0.1:5000/api/videos")
         if (response.data.success) {
+          // Only store metadata, don't preload any media files here
           setVideos(response.data.data)
+        } else {
+          setVideos([])
+          setVideosError("Failed to load song list.")
         }
       } catch (err) {
         console.error("Failed to fetch videos:", err)
+        setVideos([])
+        setVideosError("Backend is unavailable. Please start the server on 127.0.0.1:5000.")
+      } finally {
+        setIsLoadingVideos(false)
       }
     }
     fetchVideos()
@@ -66,8 +105,16 @@ const Player = () => {
 
   useEffect(() => {
     if (currentVideo && audioRef.current) {
+      // Stop and clear current source before switching
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+      
       audioRef.current.src = `http://127.0.0.1:5000/static/music/${currentVideo.id}.mp3`
       if (bgMode === 'video' && videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
         videoRef.current.src = `http://127.0.0.1:5000/static/videos/${currentVideo.id}.mp4`
       }
       
@@ -109,7 +156,19 @@ const Player = () => {
   }, [viewMode])
 
   const setupAudioAnalyzer = () => {
-    if (!audioRef.current || audioContextRef.current) return;
+    if (!audioRef.current) return;
+
+    // Cancel any existing animation loop before starting a new one
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = 0
+    }
+
+    if (audioContextRef.current) {
+      // Context already exists — just restart the draw loop
+      updateWaveform()
+      return
+    }
 
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -143,9 +202,26 @@ const Player = () => {
     
     let lastTime = performance.now();
     let bassSmoothed = 0;
+    let frameCount = 0;
     
     const draw = (time: number) => {
+      // Use viewModeRef (not the stale closure variable) to check current view
+      if (viewModeRef.current !== 'playing' || !analyserRef.current) {
+        animationFrameRef.current = 0
+        return;
+      }
+      
       animationFrameRef.current = requestAnimationFrame(draw);
+      
+      // Optimization: skip all heavy calculations if we're not actually looking at the player view
+      if (document.hidden) return;
+      
+      // Throttle to ~30fps to reduce CPU load
+      frameCount++;
+      if (frameCount % 2 !== 0) return;
+      
+      const innerContainer = waveformContainerRef.current;
+      if (!innerContainer) return;
       
       const dt = time - lastTime;
       lastTime = time;
@@ -175,9 +251,9 @@ const Player = () => {
         
         // Add subtle scale pulse based on bass
         const containerScale = 1 + (bassSmoothed / 255) * 0.05;
-        const innerContainer = document.getElementById('waveform-container');
-        if (innerContainer) {
-          innerContainer.style.transform = `scale(${containerScale})`;
+        // Use the ref directly — no getElementById needed
+        if (waveformContainerRef.current) {
+          waveformContainerRef.current.style.transform = `scale(${containerScale})`;
         }
         
         // Arrays to hold coordinates for the constellation lines
@@ -225,10 +301,10 @@ const Player = () => {
           const g = Math.floor(85 + (200 - 85) * (1 - posColorShift) * intensity);
           const b = Math.floor(247 + (255 - 247) * intensity);
           
-          const starColor = `rgba(${r}, ${g}, ${b}, ${0.4 + intensity * 0.6})`;
-          const shadowColor = `rgba(${r}, ${g}, ${b}, ${0.5 + intensity * 0.5})`;
-          const boxShadow = `0 0 ${10 + intensity * 15}px ${shadowColor}`;
-          const bgColor = `rgb(${255 - intensity * 30}, ${255 - intensity * 10}, ${255})`;
+          // Simplified color calculations - cache common values
+          const shadowBlur = 10 + intensity * 15;
+          const boxShadow = `0 0 ${shadowBlur}px rgba(${r}, ${g}, ${b}, ${0.5 + intensity * 0.5})`;
+          const bgColor = `rgb(${255 - intensity * 30}, ${255 - intensity * 10}, 255)`;
           
           if (bar) {
             bar.style.height = `${totalHeight}px`;
@@ -262,76 +338,90 @@ const Player = () => {
           // Only show active stars if they cross a certain height threshold to make it look like they "break free"
           const isActive = totalHeight > 30 && !isPaused;
           
-          starCoords.push({ x: sx, y: sy, active: isActive, color: starColor });
+          starCoords.push({ x: sx, y: sy, active: isActive, color: `rgba(${r}, ${g}, ${b}, ${0.4 + intensity * 0.6})` });
           
-          const starEl = starsRef.current[i];
-          if (starEl) {
-            // Smoothly move stars to target position
-            const currentCx = parseFloat(starEl.getAttribute('cx') || String(sx));
-            const currentCy = parseFloat(starEl.getAttribute('cy') || String(sy));
-            
-            // Lerp for smooth star movement
-            const newCx = currentCx + (sx - currentCx) * 0.2;
-            const newCy = currentCy + (sy - currentCy) * 0.2;
-            
-            starEl.setAttribute('cx', String(newCx));
-            starEl.setAttribute('cy', String(newCy));
-            
-            // Fade opacity based on activity
-            const currentOpacity = parseFloat(starEl.getAttribute('opacity') || '0');
-            const targetOpacity = isActive ? (0.4 + intensity * 0.6) : 0.1;
-            const newOpacity = currentOpacity + (targetOpacity - currentOpacity) * 0.1;
-            
-            starEl.setAttribute('opacity', String(newOpacity));
-            starEl.setAttribute('fill', starColor);
-            starEl.setAttribute('filter', `drop-shadow(0 0 ${5 + intensity*10}px ${starColor})`);
-            
-            // Update stored coords to actual rendered coords for line drawing
-            starCoords[i].x = newCx;
-            starCoords[i].y = newCy;
-          }
+          // Update star positions in memory (no DOM access)
+          const star = starPositions.current[i];
+          
+          // Lerp for smooth star movement
+          star.x = star.x + (sx - star.x) * 0.2;
+          star.y = star.y + (sy - star.y) * 0.2;
+          
+          // Fade opacity based on activity
+          const targetOpacity = isActive ? (0.4 + intensity * 0.6) : 0.1;
+          star.opacity = star.opacity + (targetOpacity - star.opacity) * 0.1;
+          
+          // Update colors
+          star.r = r;
+          star.g = g;
+          star.b = b;
+          star.alpha = 0.4 + intensity * 0.6;
+          
+          // Store for line drawing
+          starCoords[i].x = star.x;
+          starCoords[i].y = star.y;
         }
         
-        // Draw constellation lines connecting active stars
-        // We'll use 4 paths to group connections
-        const pathData = ['', '', '', ''];
-        
-        for (let i = 0; i < 64; i++) {
-          const curr = starCoords[i];
-          if (!curr.active) continue;
-          
-          let connectionsCount = 0;
-          
-          // Connect to the closest active stars, ignoring exact index order
-          // This breaks the ring and forms jagged constellations
-          for (let j = 1; j <= 8; j++) {
-            const nextIdx = (i + j) % 64;
-            const next = starCoords[nextIdx];
+        // Draw everything to Canvas (much faster than SVG DOM manipulation)
+        const canvas = constellationCanvasRef.current;
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            // Clear canvas
+            ctx.clearRect(0, 0, 800, 800);
             
-            if (next.active && connectionsCount < 2) {
-              // Calculate distance to ensure we only connect close nodes (prevents long crossing lines)
-              const dx = curr.x - next.x;
-              const dy = curr.y - next.y;
-              const dist = Math.sqrt(dx*dx + dy*dy);
+            // Draw constellation lines
+            ctx.strokeStyle = '#e9d5ff';
+            ctx.lineWidth = 0.8;
+            ctx.globalAlpha = 0.4 + (bassSmoothed/255) * 0.5;
+            
+            for (let i = 0; i < 64; i++) {
+              const curr = starCoords[i];
+              if (!curr.active) continue;
               
-              // Only connect if distance is relatively small, but larger than adjacent
-              if (dist < 150) {
-                // Distribute paths randomly among the 4 line elements for varied opacity/colors
-                const pathIdx = (i + j) % 4;
-                pathData[pathIdx] += `M ${curr.x} ${curr.y} L ${next.x} ${next.y} `;
-                connectionsCount++;
+              let connectionsCount = 0;
+              
+              for (let j = 1; j <= 5 && connectionsCount < 2; j++) {
+                const nextIdx = (i + j) % 64;
+                const next = starCoords[nextIdx];
+                
+                if (next.active) {
+                  const dx = curr.x - next.x;
+                  const dy = curr.y - next.y;
+                  const dist = Math.sqrt(dx*dx + dy*dy);
+                  
+                  if (dist < 150) {
+                    ctx.beginPath();
+                    ctx.moveTo(curr.x + 200, curr.y + 200);
+                    ctx.lineTo(next.x + 200, next.y + 200);
+                    ctx.stroke();
+                    connectionsCount++;
+                  }
+                }
               }
             }
-          }
-        }
-        
-        for (let p = 0; p < 4; p++) {
-          const lineEl = linesRef.current[p];
-          if (lineEl) {
-             lineEl.setAttribute('d', pathData[p]);
-             // Dynamic opacity for the lines based on bass, boosted so they are brighter
-             const baseOpacity = [0.4, 0.6, 0.8, 0.5][p];
-             lineEl.setAttribute('opacity', String(baseOpacity + (bassSmoothed/255) * 0.5));
+            
+            // Draw stars
+            for (let i = 0; i < 64; i++) {
+              const star = starPositions.current[i];
+              if (star.opacity < 0.05) continue;
+              
+              const radius = (i % 5 === 0) ? 2.5 : 1.5;
+              
+              // Glow effect
+              ctx.shadowBlur = 5 + star.opacity * 10;
+              ctx.shadowColor = `rgba(${star.r}, ${star.g}, ${star.b}, ${star.alpha})`;
+              
+              ctx.globalAlpha = star.opacity;
+              ctx.fillStyle = `rgba(${star.r}, ${star.g}, ${star.b}, ${star.alpha})`;
+              ctx.beginPath();
+              ctx.arc(star.x + 200, star.y + 200, radius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
           }
         }
       }
@@ -378,25 +468,48 @@ const Player = () => {
     }
   }
 
+  const formatTime = (time: number) => {
+    if (isNaN(time)) return "00:00"
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+
   const handleTimeUpdate = () => {
     if (audioRef.current) {
-      setProgress(audioRef.current.currentTime)
-      setDuration(audioRef.current.duration || 0)
+      const cur = audioRef.current.currentTime
+      const dur = audioRef.current.duration || 0
+      progressRef.current = cur
+      durationRef.current = dur
+      
+      updateProgressUI(cur, dur)
     }
   }
 
-  const formatTime = (time: number) => {
-    if (isNaN(time)) return "00:00"
-    const mins = Math.floor(time / 60)
-    const secs = Math.floor(time % 60)
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  const updateProgressUI = (cur: number, dur: number) => {
+    const percent = dur > 0 ? (cur / dur) * 100 : 0
+    const timeStr = formatTime(cur)
+    const durStr = formatTime(dur)
+
+    // Update Player View UI
+    if (progressLineRef.current) progressLineRef.current.style.width = `${percent}%`
+    if (progressThumbRef.current) progressThumbRef.current.style.left = `calc(${percent}% - 7px)`
+    if (currentTimeLabelRef.current) currentTimeLabelRef.current.textContent = timeStr
+    if (durationLabelRef.current) durationLabelRef.current.textContent = durStr
+    if (waveformTimeLabelRef.current) waveformTimeLabelRef.current.textContent = `${timeStr} / ${durStr}`
+
+    // Update Mini Player UI
+    if (miniProgressLineRef.current) miniProgressLineRef.current.style.width = `${percent}%`
+    if (miniCurrentTimeLabelRef.current) miniCurrentTimeLabelRef.current.textContent = timeStr
+    if (miniDurationLabelRef.current) miniDurationLabelRef.current.textContent = durStr
   }
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = Number(e.target.value)
     if (audioRef.current) {
       audioRef.current.currentTime = newTime
-      setProgress(newTime)
+      progressRef.current = newTime
+      updateProgressUI(newTime, durationRef.current)
       if (videoRef.current) {
         videoRef.current.currentTime = newTime
       }
@@ -443,26 +556,19 @@ const Player = () => {
     setIsPlaying(true)
   }
 
-  // Generate waveform bars using real audio data if available
-  const renderWaveform = () => {
+  // Memoize waveform bars — only created ONCE, never torn down on re-render
+  const waveformBars = useMemo(() => {
     const bars = 64;
-    // Align radius to be the same as the entrance ring (90px mapped to 400x400 viewbox -> which was 180px in 400x400 container)
     const radius = 180;
     const items = [];
-    
-    // reset bars array
     barsRef.current = new Array(bars).fill(null);
-    
+
     for (let i = 0; i < bars; i++) {
-      // Rotate starting angle so 0 is top
       const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius;
-      // Calculate rotation for the bar itself (point outward from center)
       const rotation = angle * (180 / Math.PI) + 90;
-      
-      const baseHeight = 10;
-      
+
       items.push(
         <div
           key={i}
@@ -472,16 +578,16 @@ const Player = () => {
             left: `calc(50% + ${x}px)`,
             top: `calc(50% + ${y}px)`,
             transform: `translate(-50%, -100%) rotate(${rotation}deg)`,
-            height: `${baseHeight}px`,
+            height: '10px',
             transitionProperty: 'height, box-shadow',
             transitionDuration: '75ms',
           }}
         />
       );
     }
-    
     return items;
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty deps: bars never need to be recreated
 
   return (
     <div className="flex h-screen bg-[#1c1d25] text-zinc-300 font-sans overflow-hidden">
@@ -583,6 +689,7 @@ const Player = () => {
                 className="absolute inset-0 w-full h-full object-cover opacity-90"
                 muted
                 playsInline
+                preload="none"
                 loop={false}
               />
             )
@@ -649,43 +756,21 @@ const Player = () => {
                 {/* Outer Ring */}
                 <div className="absolute inset-4 border border-white/20 rounded-full" />
                 
-                {/* Constellation SVG Layer */}
-                <svg 
-                  className="absolute inset-[-200px] w-[800px] h-[800px] pointer-events-none z-10 overflow-visible" 
-                  viewBox="-200 -200 800 800"
-                >
-                  {/* Constellation Lines */}
-                  {[0, 1, 2, 3].map(i => (
-                    <path 
-                      key={`line-${i}`}
-                      ref={(el) => { linesRef.current[i] = el; }}
-                      fill="none"
-                      stroke="#e9d5ff"
-                      strokeWidth={i === 2 ? "1.5" : "0.5"}
-                      style={{ transition: 'opacity 0.1s' }}
-                    />
-                  ))}
-                  
-                  {/* Constellation Stars */}
-                  {Array.from({ length: 64 }).map((_, i) => (
-                    <circle
-                      key={`star-${i}`}
-                      ref={(el) => { starsRef.current[i] = el; }}
-                      cx="200"
-                      cy="200"
-                      r={i % 5 === 0 ? "2.5" : "1.5"}
-                      fill="transparent"
-                      opacity="0"
-                      style={{ transition: 'fill 0.1s' }}
-                    />
-                  ))}
-                </svg>
+                {/* Constellation Canvas Layer (replaces SVG for performance) */}
+                <canvas 
+                  ref={constellationCanvasRef}
+                  width={800}
+                  height={800}
+                  className="absolute inset-[-200px] w-[800px] h-[800px] pointer-events-none z-10"
+                  style={{ imageRendering: 'auto' }}
+                />
 
                 {/* Waveform */}
-                {renderWaveform()}
+                {waveformBars}
                 
                 {/* Inner Cover/Info */}
                 <div 
+                  ref={waveformContainerRef}
                   id="waveform-container"
                   className="absolute inset-8 rounded-full overflow-hidden shadow-2xl border-2 border-white/10 bg-black/40 backdrop-blur-sm transition-transform duration-75"
                 >
@@ -700,8 +785,8 @@ const Player = () => {
                         <h1 className="text-2xl font-bold text-white mb-2 line-clamp-3 leading-snug drop-shadow-md">
                           {currentVideo.title}
                         </h1>
-                        <p className="text-lg text-purple-300 font-mono mt-2 drop-shadow-md">
-                          {formatTime(progress)} / {formatTime(duration)}
+                        <p ref={waveformTimeLabelRef} className="text-lg text-purple-300 font-mono mt-2 drop-shadow-md">
+                          00:00 / 00:00
                         </p>
                       </div>
                     </>
@@ -723,13 +808,13 @@ const Player = () => {
             } : {}}
           >
             <div className="flex items-center gap-6 w-full">
-              <span className="text-sm font-bold font-mono text-purple-400 w-12 text-right drop-shadow-md">{formatTime(progress)}</span>
+              <span ref={currentTimeLabelRef} className="text-sm font-bold font-mono text-purple-400 w-12 text-right drop-shadow-md">00:00</span>
               <div className="flex-1 h-1.5 relative group cursor-pointer flex items-center">
                 <input 
                   type="range" 
                   min="0" 
-                  max={duration || 100} 
-                  value={progress} 
+                  max={durationRef.current || 100} 
+                  defaultValue="0"
                   onChange={handleProgressChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
@@ -737,17 +822,19 @@ const Player = () => {
                 <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden transition-all group-hover:h-1.5 shadow-[0_0_10px_rgba(255,255,255,0.1)]">
                   {/* Filled track line */}
                   <div 
+                    ref={progressLineRef}
                     className="h-full bg-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.8)] relative"
-                    style={{ width: `${(progress / (duration || 1)) * 100}%` }}
+                    style={{ width: '0%' }}
                   ></div>
                 </div>
                 {/* Thumb/Handle */}
                 <div 
+                  ref={progressThumbRef}
                   className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.9)] opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 pointer-events-none"
-                  style={{ left: `calc(${(progress / (duration || 1)) * 100}% - 7px)` }}
+                  style={{ left: `calc(0% - 7px)` }}
                 ></div>
               </div>
-              <span className="text-sm font-bold font-mono text-purple-400 w-12 drop-shadow-md">{formatTime(duration)}</span>
+              <span ref={durationLabelRef} className="text-sm font-bold font-mono text-purple-400 w-12 drop-shadow-md">00:00</span>
             </div>
           </div>
 
@@ -926,6 +1013,7 @@ const Player = () => {
                     <img 
                       src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`} 
                       alt={video.title}
+                      loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/shapes/svg?seed=${video.id}`
@@ -942,12 +1030,33 @@ const Player = () => {
                   </h3>
                   <div className="flex justify-between items-center text-xs text-zinc-400 font-medium">
                     <p className="truncate pr-2">Bilibili</p>
-                    <span className="shrink-0 bg-black/30 px-2 py-1 rounded text-zinc-300">{formatTime(currentVideo?.id === video.id ? duration : 0)}</span>
+                    <span className="shrink-0 bg-black/30 px-2 py-1 rounded text-zinc-300">
+                      {currentVideo?.id === video.id ? formatTime(durationRef.current) : '00:00'}
+                    </span>
                   </div>
                 </div>
               ))}
               
-              {videos.length === 0 && (
+              {!isLoadingVideos && videosError && (
+                <div className="col-span-full h-64 flex flex-col items-center justify-center text-zinc-400 bg-[#252731] rounded-2xl border border-red-500/20">
+                  <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+                    <Search size={24} className="text-red-300" />
+                  </div>
+                  <p className="text-lg font-medium text-red-200">Unable to load music list</p>
+                  <p className="text-sm text-zinc-400 mt-2">{videosError}</p>
+                </div>
+              )}
+
+              {isLoadingVideos && (
+                <div className="col-span-full h-64 flex flex-col items-center justify-center text-zinc-500 bg-[#252731] rounded-2xl border border-zinc-800 border-dashed">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                    <Search size={24} className="text-zinc-600" />
+                  </div>
+                  <p className="text-lg font-medium text-zinc-400">Loading music...</p>
+                </div>
+              )}
+
+              {!isLoadingVideos && !videosError && videos.length === 0 && (
                 <div className="col-span-full h-64 flex flex-col items-center justify-center text-zinc-500 bg-[#252731] rounded-2xl border border-zinc-800 border-dashed">
                   <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                     <Search size={24} className="text-zinc-600" />
@@ -969,6 +1078,7 @@ const Player = () => {
         onLoadedMetadata={handleTimeUpdate}
         className="hidden"
         crossOrigin="anonymous"
+        preload="none"
       />
 
       {/* Bottom Mini Player Bar (Visible in browse view when something is selected) */}
@@ -1022,24 +1132,25 @@ const Player = () => {
           </div>
           
           <div className="flex items-center gap-3 w-full">
-            <span className="text-[11px] font-mono text-zinc-500 w-8 text-right">{formatTime(progress)}</span>
+            <span ref={miniCurrentTimeLabelRef} className="text-[11px] font-mono text-zinc-500 w-8 text-right">00:00</span>
             <div className="flex-1 h-1 relative group cursor-pointer flex items-center">
               <input 
                 type="range" 
                 min="0" 
-                max={duration || 100} 
-                value={progress} 
+                max={durationRef.current || 100} 
+                defaultValue="0"
                 onChange={handleProgressChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               />
               <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden transition-all group-hover:h-1.5">
                 <div 
+                  ref={miniProgressLineRef}
                   className="h-full bg-purple-500 rounded-full"
-                  style={{ width: `${(progress / (duration || 1)) * 100}%` }}
+                  style={{ width: '0%' }}
                 ></div>
               </div>
             </div>
-            <span className="text-[11px] font-mono text-zinc-500 w-8">{formatTime(duration)}</span>
+            <span ref={miniDurationLabelRef} className="text-[11px] font-mono text-zinc-500 w-8">00:00</span>
           </div>
         </div>
 
