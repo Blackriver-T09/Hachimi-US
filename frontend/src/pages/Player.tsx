@@ -176,50 +176,59 @@ const Player = () => {
           innerContainer.style.transform = `scale(${containerScale})`;
         }
         
-        // We have 64 bars total. The dataArray has 128 items.
-        // Let's create a symmetrical waveform: 32 items mirrored on left/right.
-        for (let i = 0; i < 32; i++) {
-          // Add some dynamic smoothing/peaking for intense effect
-          // Map index to frequency (logarithmic-ish curve looks better)
-          const freqIndex = Math.floor(Math.pow(i / 31, 1.5) * 40); 
+        // We have 64 bars total. Let's make it a continuous asymmetrical waveform around the circle.
+        // To make it irregular and fully active, we won't just map low->high frequency linearly.
+        // Instead, we'll map the best audible frequencies (0-60 bins) across the whole circle,
+        // shuffling them slightly or bouncing back and forth so the whole circle jumps.
+        for (let i = 0; i < 64; i++) {
+          
+          // Create an irregular but continuous pattern:
+          // We pick a frequency bin based on 'i'. To make the whole circle active,
+          // we use a sine wave to map 'i' (0-63) to frequency bins (0-40).
+          // This creates a wave that goes low-mid-high-mid-low around the circle,
+          // combined with a bit of pseudo-randomness for irregularity.
+          
+          const normalizedI = i / 63; // 0 to 1
+          
+          // base shape: a distorted sine wave so it hits low/mid frequencies multiple times around the circle
+          const baseShape = Math.abs(Math.sin(normalizedI * Math.PI * 3 + time * 0.001));
+          
+          // Map to frequency bins 0 to 40 (where most musical energy is)
+          // Add some irregular mapping based on index so adjacent bars aren't exactly the same
+          let freqIndex = Math.floor(baseShape * 30 + (i % 3) * 5);
+          
+          // Ensure freqIndex is within bounds
+          freqIndex = Math.max(0, Math.min(60, freqIndex));
+          
           const value = dataArray[freqIndex] || 0;
           
-          // Boost higher frequencies a bit to make them visible
-          const boost = 1 + (i / 31) * 0.5;
+          // Boost factors to ensure all sides have good height
+          const boost = 1 + (freqIndex / 40) * 0.5;
           const heightOffset = Math.pow((value / 255), 1.2) * 80 * boost; // Max 80px added height
           
-          // Minimum height pulse based on overall bass so even quiet parts have slight life
-          const idlePulse = isPaused ? 0 : (Math.sin(time / 500 + i * 0.2) * 2 + 2);
+          // Irregular idle pulse so the circle always feels "alive" even when quiet
+          const idlePulse = isPaused ? 0 : (Math.sin(time / 400 + i * 0.5) * 3 + 3);
           const totalHeight = 10 + heightOffset + idlePulse; // Base 10px height
           
-          // Mirror index:
-          // Right side: i (0 to 31)
-          // Left side: 63 - i (63 down to 32)
+          const bar = barsRef.current[i];
           
-          const rightBar = barsRef.current[i];
-          const leftBar = barsRef.current[63 - i];
-          
-          // More intense colors based on height
+          // Colors based on height and position for a varied look
           const intensity = Math.min(1, totalHeight/90);
+          const posColorShift = Math.sin(normalizedI * Math.PI * 2) * 0.5 + 0.5; // 0 to 1 based on position
           
-          // Neon cyan/purple gradient based on frequency
-          const r = Math.floor(168 + (0 - 168) * intensity);
-          const g = Math.floor(85 + (255 - 85) * intensity);
+          // Neon cyan/purple/pink irregular gradient
+          const r = Math.floor(168 + (255 - 168) * posColorShift * intensity);
+          const g = Math.floor(85 + (200 - 85) * (1 - posColorShift) * intensity);
           const b = Math.floor(247 + (255 - 247) * intensity);
           
           const shadowColor = `rgba(${r}, ${g}, ${b}, ${0.5 + intensity * 0.5})`;
           const boxShadow = `0 0 ${10 + intensity * 15}px ${shadowColor}`;
-          const bgColor = `rgb(${255 - intensity * 50}, ${255}, ${255})`;
+          const bgColor = `rgb(${255 - intensity * 30}, ${255 - intensity * 10}, ${255})`;
           
-          if (rightBar) {
-            rightBar.style.height = `${totalHeight}px`;
-            rightBar.style.boxShadow = boxShadow;
-            rightBar.style.backgroundColor = bgColor;
-          }
-          if (leftBar) {
-            leftBar.style.height = `${totalHeight}px`;
-            leftBar.style.boxShadow = boxShadow;
-            leftBar.style.backgroundColor = bgColor;
+          if (bar) {
+            bar.style.height = `${totalHeight}px`;
+            bar.style.boxShadow = boxShadow;
+            bar.style.backgroundColor = bgColor;
           }
         }
       }
