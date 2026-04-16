@@ -43,6 +43,10 @@ const Player = () => {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const animationFrameRef = useRef<number>(0)
   const barsRef = useRef<(HTMLDivElement | null)[]>([])
+  
+  // Refs for the new constellation layer
+  const starsRef = useRef<(SVGCircleElement | null)[]>([])
+  const linesRef = useRef<(SVGPathElement | null)[]>([])
 
   const navigate = useNavigate()
 
@@ -176,10 +180,10 @@ const Player = () => {
           innerContainer.style.transform = `scale(${containerScale})`;
         }
         
-        // We have 64 bars total. Let's make it a continuous asymmetrical waveform around the circle.
-        // To make it irregular and fully active, we won't just map low->high frequency linearly.
-        // Instead, we'll map the best audible frequencies (0-60 bins) across the whole circle,
-        // shuffling them slightly or bouncing back and forth so the whole circle jumps.
+        // Arrays to hold coordinates for the constellation lines
+        const starCoords: { x: number, y: number, active: boolean, color: string }[] = [];
+        const radius = 180; // Base radius matching renderWaveform
+        
         for (let i = 0; i < 64; i++) {
           
           // Create an irregular but continuous pattern:
@@ -221,6 +225,7 @@ const Player = () => {
           const g = Math.floor(85 + (200 - 85) * (1 - posColorShift) * intensity);
           const b = Math.floor(247 + (255 - 247) * intensity);
           
+          const starColor = `rgba(${r}, ${g}, ${b}, ${0.4 + intensity * 0.6})`;
           const shadowColor = `rgba(${r}, ${g}, ${b}, ${0.5 + intensity * 0.5})`;
           const boxShadow = `0 0 ${10 + intensity * 15}px ${shadowColor}`;
           const bgColor = `rgb(${255 - intensity * 30}, ${255 - intensity * 10}, ${255})`;
@@ -229,6 +234,104 @@ const Player = () => {
             bar.style.height = `${totalHeight}px`;
             bar.style.boxShadow = boxShadow;
             bar.style.backgroundColor = bgColor;
+          }
+
+          // Calculate constellation star position
+          // To break the "circle" feeling, we want extreme spikes and valleys.
+          // Base offset is smaller so quiet parts stay close to the bars
+          const baseOffset = 15; 
+          
+          // Dynamic offset uses an exponential curve so peaks shoot out drastically 
+          // while valleys stay low.
+          const dynamicOffset = Math.pow(intensity, 3) * 150; 
+          
+          // Some random permanent spikes based on index so the baseline shape isn't a circle
+          const structuralSpike = (i % 7 === 0) ? Math.pow(intensity, 1.5) * 60 : 0;
+          const structuralDip = (i % 5 === 0) ? -20 * (1 - intensity) : 0;
+          
+          const floatingOffset = baseOffset + dynamicOffset + structuralSpike + structuralDip;
+          const starDist = radius + totalHeight + floatingOffset;
+          
+          // Angle matches the bar's angle calculation in renderWaveform
+          // Add slight angle jitter to break the perfect radial alignment
+          const angleJitter = (Math.sin(i * 13) * 0.05) * intensity;
+          const angle = (i / 64) * Math.PI * 2 - Math.PI / 2 + angleJitter;
+          const sx = 200 + Math.cos(angle) * starDist; // 200 is the center of the 400x400 SVG
+          const sy = 200 + Math.sin(angle) * starDist;
+          
+          // Only show active stars if they cross a certain height threshold to make it look like they "break free"
+          const isActive = totalHeight > 30 && !isPaused;
+          
+          starCoords.push({ x: sx, y: sy, active: isActive, color: starColor });
+          
+          const starEl = starsRef.current[i];
+          if (starEl) {
+            // Smoothly move stars to target position
+            const currentCx = parseFloat(starEl.getAttribute('cx') || String(sx));
+            const currentCy = parseFloat(starEl.getAttribute('cy') || String(sy));
+            
+            // Lerp for smooth star movement
+            const newCx = currentCx + (sx - currentCx) * 0.2;
+            const newCy = currentCy + (sy - currentCy) * 0.2;
+            
+            starEl.setAttribute('cx', String(newCx));
+            starEl.setAttribute('cy', String(newCy));
+            
+            // Fade opacity based on activity
+            const currentOpacity = parseFloat(starEl.getAttribute('opacity') || '0');
+            const targetOpacity = isActive ? (0.4 + intensity * 0.6) : 0.1;
+            const newOpacity = currentOpacity + (targetOpacity - currentOpacity) * 0.1;
+            
+            starEl.setAttribute('opacity', String(newOpacity));
+            starEl.setAttribute('fill', starColor);
+            starEl.setAttribute('filter', `drop-shadow(0 0 ${5 + intensity*10}px ${starColor})`);
+            
+            // Update stored coords to actual rendered coords for line drawing
+            starCoords[i].x = newCx;
+            starCoords[i].y = newCy;
+          }
+        }
+        
+        // Draw constellation lines connecting active stars
+        // We'll use 4 paths to group connections
+        const pathData = ['', '', '', ''];
+        
+        for (let i = 0; i < 64; i++) {
+          const curr = starCoords[i];
+          if (!curr.active) continue;
+          
+          let connectionsCount = 0;
+          
+          // Connect to the closest active stars, ignoring exact index order
+          // This breaks the ring and forms jagged constellations
+          for (let j = 1; j <= 8; j++) {
+            const nextIdx = (i + j) % 64;
+            const next = starCoords[nextIdx];
+            
+            if (next.active && connectionsCount < 2) {
+              // Calculate distance to ensure we only connect close nodes (prevents long crossing lines)
+              const dx = curr.x - next.x;
+              const dy = curr.y - next.y;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              
+              // Only connect if distance is relatively small, but larger than adjacent
+              if (dist < 150) {
+                // Distribute paths randomly among the 4 line elements for varied opacity/colors
+                const pathIdx = (i + j) % 4;
+                pathData[pathIdx] += `M ${curr.x} ${curr.y} L ${next.x} ${next.y} `;
+                connectionsCount++;
+              }
+            }
+          }
+        }
+        
+        for (let p = 0; p < 4; p++) {
+          const lineEl = linesRef.current[p];
+          if (lineEl) {
+             lineEl.setAttribute('d', pathData[p]);
+             // Dynamic opacity for the lines based on bass, boosted so they are brighter
+             const baseOpacity = [0.4, 0.6, 0.8, 0.5][p];
+             lineEl.setAttribute('opacity', String(baseOpacity + (bassSmoothed/255) * 0.5));
           }
         }
       }
@@ -497,6 +600,38 @@ const Player = () => {
                 {/* Outer Ring */}
                 <div className="absolute inset-4 border border-white/20 rounded-full" />
                 
+                {/* Constellation SVG Layer */}
+                <svg 
+                  className="absolute inset-[-200px] w-[800px] h-[800px] pointer-events-none z-10 overflow-visible" 
+                  viewBox="-200 -200 800 800"
+                >
+                  {/* Constellation Lines */}
+                  {[0, 1, 2, 3].map(i => (
+                    <path 
+                      key={`line-${i}`}
+                      ref={(el) => { linesRef.current[i] = el; }}
+                      fill="none"
+                      stroke="#e9d5ff"
+                      strokeWidth={i === 2 ? "1.5" : "0.5"}
+                      style={{ transition: 'opacity 0.1s' }}
+                    />
+                  ))}
+                  
+                  {/* Constellation Stars */}
+                  {Array.from({ length: 64 }).map((_, i) => (
+                    <circle
+                      key={`star-${i}`}
+                      ref={(el) => { starsRef.current[i] = el; }}
+                      cx="200"
+                      cy="200"
+                      r={i % 5 === 0 ? "2.5" : "1.5"}
+                      fill="transparent"
+                      opacity="0"
+                      style={{ transition: 'fill 0.1s' }}
+                    />
+                  ))}
+                </svg>
+
                 {/* Waveform */}
                 {renderWaveform()}
                 
