@@ -20,7 +20,9 @@ import {
   Repeat,
   Repeat1,
   Shuffle,
-  ListPlus
+  ListPlus,
+  GripVertical,
+  X
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
@@ -41,7 +43,7 @@ const Player = () => {
   // Use refs for progress and duration to prevent re-renders
   const progressRef = useRef(0)
   const durationRef = useRef(0)
-  const [viewMode, setViewMode] = useState<'browse' | 'playing' | 'favorites'>('browse')
+  const [viewMode, setViewMode] = useState<'browse' | 'playing' | 'favorites' | 'playlists'>('browse')
   const [bgMode, setBgMode] = useState<'blur' | 'video'>('blur')
   const [volume, _setVolume] = useState(1) // 0 to 1 (setVolume reserved for future volume slider)
   const [isMuted, setIsMuted] = useState(false)
@@ -51,6 +53,13 @@ const Player = () => {
     const saved = localStorage.getItem('likedVideos')
     return saved ? new Set(JSON.parse(saved)) : new Set()
   })
+  const [playlist, setPlaylist] = useState<number[]>(() => {
+    // Load playlist from localStorage (array of video IDs)
+    const saved = localStorage.getItem('playlist')
+    return saved ? JSON.parse(saved) : []
+  })
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   
   // Session ID for online tracking
   const sessionIdRef = useRef<string>(
@@ -81,7 +90,7 @@ const Player = () => {
   // Canvas ref for constellation layer (replaces SVG for performance)
   const constellationCanvasRef = useRef<HTMLCanvasElement>(null)
   // Track viewMode in a ref so the rAF closure always sees the latest value
-  const viewModeRef = useRef<'browse' | 'playing' | 'favorites'>('browse')
+  const viewModeRef = useRef<'browse' | 'playing' | 'favorites' | 'playlists'>('browse')
   // Store star positions in memory instead of reading from DOM
   const starPositions = useRef<{x: number, y: number, opacity: number, r: number, g: number, b: number, alpha: number}[]>(
     Array.from({length: 64}, () => ({x: 0, y: 0, opacity: 0, r: 168, g: 85, b: 247, alpha: 0.5}))
@@ -652,6 +661,31 @@ const Player = () => {
     setIsPlaying(true)
   }
 
+  const handleAddToPlaylist = (videoId: number, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click
+    
+    const newPlaylist = [...playlist, videoId]
+    setPlaylist(newPlaylist)
+    localStorage.setItem('playlist', JSON.stringify(newPlaylist))
+  }
+
+  const handleRemoveFromPlaylist = (index: number) => {
+    const newPlaylist = playlist.filter((_, i) => i !== index)
+    setPlaylist(newPlaylist)
+    localStorage.setItem('playlist', JSON.stringify(newPlaylist))
+  }
+
+  const handleDragOverItem = (draggedIdx: number, targetIdx: number) => {
+    if (draggedIdx === targetIdx) return
+    
+    // Swap items in real-time
+    const newPlaylist = [...playlist]
+    const [removed] = newPlaylist.splice(draggedIdx, 1)
+    newPlaylist.splice(targetIdx, 0, removed)
+    setPlaylist(newPlaylist)
+    setDraggedIndex(targetIdx) // Update dragged index to new position
+  }
+
   const handleLike = async (videoId: number, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent card click
     
@@ -1120,9 +1154,19 @@ const Player = () => {
               </div>
               <span className="font-medium">Now Playing</span>
             </button>
-            <button className="w-full flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition mt-8">
-              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"><Menu size={16} /></div>
+            <button 
+              onClick={() => setViewMode('playlists')}
+              className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition mt-8 ${viewMode === 'playlists' ? 'bg-zinc-800/40 text-white border-l-2 border-purple-500' : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-white'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${viewMode === 'playlists' ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5'}`}>
+                <Menu size={16} />
+              </div>
               <span className="font-medium">Playlists</span>
+              {playlist.length > 0 && (
+                <span className="ml-auto bg-purple-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {playlist.length}
+                </span>
+              )}
             </button>
             <button 
               onClick={() => setViewMode('favorites')}
@@ -1213,10 +1257,7 @@ const Player = () => {
                   <div className="flex justify-between items-center text-xs text-zinc-400 font-medium">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          // TODO: Add to playlist functionality
-                        }}
+                        onClick={(e) => handleAddToPlaylist(video.id, e)}
                         className="p-1.5 rounded-full hover:bg-white/10 transition opacity-60 hover:opacity-100"
                         title="Add to Playlist"
                       >
@@ -1398,9 +1439,7 @@ const Player = () => {
                   <div className="flex justify-between items-center text-xs text-zinc-400 font-medium">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                        }}
+                        onClick={(e) => handleAddToPlaylist(video.id, e)}
                         className="p-1.5 rounded-full hover:bg-white/10 transition opacity-60 hover:opacity-100"
                         title="Add to Playlist"
                       >
@@ -1424,6 +1463,151 @@ const Player = () => {
                 </div>
               ))}
               </div>
+            </div>
+          )}
+
+          {viewMode === 'playlists' && (
+            <div className="mb-12 text-left">
+              <div className="flex justify-between items-end mb-8 text-left animate-[float-up_0.6s_ease-out]">
+                <h2 className="text-3xl font-bold text-white tracking-tight">My Playlist</h2>
+                <span className="text-sm font-medium text-zinc-400">{playlist.length} songs</span>
+              </div>
+
+              {playlist.length === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-zinc-500 bg-[#252731] rounded-2xl border border-zinc-800 border-dashed animate-[float-up_0.8s_ease-out_0.15s_both]">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                    <Menu size={24} className="text-zinc-600" />
+                  </div>
+                  <p className="text-lg font-medium text-zinc-400">Your playlist is empty</p>
+                  <p className="text-sm text-zinc-500 mt-2">Click the + button on any song to add it here</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {playlist.map((videoId, index) => {
+                    const video = videos.find(v => v.id === videoId)
+                    if (!video) return null
+                    
+                    const isDragging = draggedIndex === index
+                    const isDraggedOver = dragOverIndex === index
+                    
+                    return (
+                      <div
+                        key={`${videoId}-${index}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = 'move'
+                          e.dataTransfer.setData('text/plain', index.toString())
+                          setDraggedIndex(index)
+                        }}
+                        onDragEnter={() => {
+                          if (draggedIndex !== null && draggedIndex !== index) {
+                            setDragOverIndex(index)
+                            handleDragOverItem(draggedIndex, index)
+                          }
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = 'move'
+                        }}
+                        onDragLeave={(e) => {
+                          if (e.currentTarget === e.target) {
+                            setDragOverIndex(null)
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          // Save to localStorage on drop
+                          localStorage.setItem('playlist', JSON.stringify(playlist))
+                          setDraggedIndex(null)
+                          setDragOverIndex(null)
+                        }}
+                        onDragEnd={() => {
+                          // Save to localStorage on drag end
+                          localStorage.setItem('playlist', JSON.stringify(playlist))
+                          setDraggedIndex(null)
+                          setDragOverIndex(null)
+                        }}
+                        className={`bg-[#252731] rounded-xl p-4 flex items-center gap-4 cursor-move hover:bg-[#2d2f3b] transition-all duration-200 group border hover:shadow-lg animate-[float-up_0.6s_ease-out] ${
+                          isDragging ? 'opacity-50 scale-95 border-purple-500/50' : 
+                          isDraggedOver ? 'border-purple-500 shadow-lg shadow-purple-500/20 scale-105' : 
+                          'border-white/5 hover:border-white/10'
+                        }`}
+                        style={{ 
+                          animationDelay: `${index * 0.05}s`, 
+                          animationFillMode: 'both',
+                          transform: isDraggedOver ? 'translateY(-4px)' : undefined
+                        }}
+                      >
+                        {/* Drag Handle */}
+                        <div className="text-zinc-600 group-hover:text-zinc-400 transition">
+                          <GripVertical size={20} />
+                        </div>
+
+                        {/* Album Art */}
+                        <div 
+                          className="w-16 h-16 rounded-lg overflow-hidden bg-black/50 shrink-0 cursor-pointer"
+                          onClick={() => {
+                            setCurrentVideo(video)
+                            setIsPlaying(true)
+                            setViewMode('playing')
+                          }}
+                        >
+                          <img 
+                            src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`}
+                            alt={video.title}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/shapes/svg?seed=${video.id}`
+                            }}
+                          />
+                        </div>
+
+                        {/* Song Info */}
+                        <div 
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => {
+                            setCurrentVideo(video)
+                            setIsPlaying(true)
+                            setViewMode('playing')
+                          }}
+                        >
+                          <h3 className="font-bold text-zinc-100 truncate text-base" title={video.title}>
+                            {video.title}
+                          </h3>
+                          <p className="text-sm text-zinc-500 mt-0.5">
+                            ♥ {video.likes} likes
+                          </p>
+                        </div>
+
+                        {/* Play Button */}
+                        <button
+                          onClick={() => {
+                            setCurrentVideo(video)
+                            setIsPlaying(true)
+                            setViewMode('playing')
+                          }}
+                          className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 transition shrink-0"
+                        >
+                          {currentVideo?.id === video.id && isPlaying ? (
+                            <Pause size={18} fill="currentColor" />
+                          ) : (
+                            <Play size={18} fill="currentColor" className="ml-0.5" />
+                          )}
+                        </button>
+
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => handleRemoveFromPlaylist(index)}
+                          className="w-8 h-8 rounded-full hover:bg-red-500/20 text-zinc-600 hover:text-red-400 flex items-center justify-center transition shrink-0"
+                          title="Remove from playlist"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
