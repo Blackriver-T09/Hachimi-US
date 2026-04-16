@@ -137,10 +137,25 @@ const Admin = () => {
         handleLogout()
         return
       }
-      setResult({
-        success: false,
-        msg: err.response?.data?.error || "Failed to scrape video"
-      })
+      
+      // Handle duplicate URL (409 Conflict)
+      if (err.response?.status === 409 && err.response?.data?.existing) {
+        const existing = err.response.data.existing
+        setResult({
+          success: false,
+          msg: `⚠️ Video already exists in library!`,
+          data: {
+            id: existing.id,
+            title: existing.title,
+            note: `Added on ${new Date(existing.created_at).toLocaleString()}`
+          }
+        })
+      } else {
+        setResult({
+          success: false,
+          msg: err.response?.data?.error || "Failed to scrape video"
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -258,20 +273,25 @@ const Admin = () => {
             </form>
 
             {result && (
-              <div className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${result.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+              <div className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${result.success ? 'bg-green-500/10 border border-green-500/30' : result.msg.includes('already exists') ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
                 {result.success ? (
                   <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
+                ) : result.msg.includes('already exists') ? (
+                  <XCircle className="w-5 h-5 text-yellow-500 mt-0.5" />
                 ) : (
                   <XCircle className="w-5 h-5 text-red-500 mt-0.5" />
                 )}
-                <div>
-                  <p className={`font-medium ${result.success ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex-1">
+                  <p className={`font-medium ${result.success ? 'text-green-400' : result.msg.includes('already exists') ? 'text-yellow-400' : 'text-red-400'}`}>
                     {result.msg}
                   </p>
-                  {result.success && result.data && (
-                    <div className="mt-2 text-sm text-zinc-400">
+                  {result.data && (
+                    <div className="mt-2 text-sm text-zinc-400 space-y-1">
                       <p>Title: <span className="text-zinc-300">{result.data.title}</span></p>
                       <p>ID: <span className="text-zinc-300">{result.data.id}</span></p>
+                      {result.data.note && (
+                        <p className="text-zinc-500 italic">{result.data.note}</p>
+                      )}
                     </div>
                   )}
                 </div>

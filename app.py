@@ -178,6 +178,25 @@ def handle_scrape():
         return jsonify({'success': False, 'error': 'No URL provided'}), 400
         
     url = data['url']
+    
+    # Check if URL already exists in database
+    db = SessionLocal()
+    try:
+        existing_video = db.query(Video).filter(Video.source_url == url).first()
+        if existing_video:
+            return jsonify({
+                'success': False,
+                'error': f'This video has already been added (ID: {existing_video.id}, Title: {existing_video.title})',
+                'existing': {
+                    'id': existing_video.id,
+                    'title': existing_video.title,
+                    'created_at': existing_video.created_at.isoformat()
+                }
+            }), 409  # 409 Conflict
+    finally:
+        db.close()
+    
+    # Proceed with scraping if URL is new
     try:
         result = scrape_bilibili(url)
         return jsonify({
