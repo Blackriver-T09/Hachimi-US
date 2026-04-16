@@ -45,7 +45,7 @@ const Player = () => {
   const durationRef = useRef(0)
   const [viewMode, setViewMode] = useState<'browse' | 'playing' | 'favorites' | 'playlists'>('browse')
   const [bgMode, setBgMode] = useState<'blur' | 'video'>('blur')
-  const [volume, _setVolume] = useState(1) // 0 to 1 (setVolume reserved for future volume slider)
+  const [volume, setVolume] = useState(1) // 0 to 1
   const [isMuted, setIsMuted] = useState(false)
   const [playMode, setPlayMode] = useState<'loop' | 'loop-one' | 'shuffle'>('loop') // loop all, loop one, shuffle
   const [likedVideos, setLikedVideos] = useState<Set<number>>(() => {
@@ -1698,8 +1698,56 @@ const Player = () => {
         </div>
 
         {/* Right: Actions */}
-        <div className="w-[320px] shrink-0 flex justify-end items-center gap-4">
-           {currentVideo && (
+        <div className="w-[320px] shrink-0 flex justify-end items-center gap-3">
+          {/* Play Mode Button */}
+          <button
+            onClick={() => {
+              if (playMode === 'loop') setPlayMode('loop-one')
+              else if (playMode === 'loop-one') setPlayMode('shuffle')
+              else setPlayMode('loop')
+            }}
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-purple-400 flex items-center justify-center transition border border-white/5"
+            title={playMode === 'loop' ? 'Loop All' : playMode === 'loop-one' ? 'Loop One' : 'Shuffle'}
+          >
+            {playMode === 'loop' && <Repeat size={14} />}
+            {playMode === 'loop-one' && <Repeat1 size={14} />}
+            {playMode === 'shuffle' && <Shuffle size={14} />}
+          </button>
+
+          {/* Volume Control */}
+          <div className="flex items-center gap-2 group/volume">
+            <button
+              onClick={() => setIsMuted(!isMuted)}
+              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition border border-white/5"
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            </button>
+            <div className="w-0 group-hover/volume:w-20 overflow-hidden transition-all duration-300">
+              <div className="relative w-20 h-1 bg-white/10 rounded-full">
+                <div 
+                  className="absolute left-0 top-0 h-full bg-purple-500 rounded-full pointer-events-none"
+                  style={{ width: `${isMuted ? 0 : volume * 100}%` }}
+                ></div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={isMuted ? 0 : volume * 100}
+                  onChange={(e) => {
+                    const newVolume = parseInt(e.target.value) / 100
+                    setVolume(newVolume)
+                    if (audioRef.current) audioRef.current.volume = newVolume
+                    if (newVolume > 0) setIsMuted(false)
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Source Link */}
+          {currentVideo && (
             <a 
               href={currentVideo.source_url}
               target="_blank"
@@ -1709,7 +1757,7 @@ const Player = () => {
             >
               <ExternalLink size={14} />
             </a>
-           )}
+          )}
         </div>
       </div>
 
