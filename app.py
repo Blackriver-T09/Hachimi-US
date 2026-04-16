@@ -120,7 +120,8 @@ def get_videos():
                 'title': v.title,
                 'source_url': v.source_url,
                 'created_at': v.created_at.isoformat(),
-                'duration': duration
+                'duration': duration,
+                'likes': v.likes
             })
         return jsonify({'success': True, 'data': video_list})
     finally:
@@ -141,6 +142,38 @@ def update_video(video_id):
             db.commit()
         
         return jsonify({'success': True})
+    finally:
+        db.close()
+
+@app.route('/api/videos/<int:video_id>/like', methods=['POST'])
+def like_video(video_id):
+    """Like a video (increment likes count)"""
+    db = SessionLocal()
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            return jsonify({'success': False, 'error': 'Video not found'}), 404
+        
+        video.likes += 1
+        db.commit()
+        
+        return jsonify({'success': True, 'likes': video.likes})
+    finally:
+        db.close()
+
+@app.route('/api/videos/<int:video_id>/unlike', methods=['POST'])
+def unlike_video(video_id):
+    """Unlike a video (decrement likes count, minimum 0)"""
+    db = SessionLocal()
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            return jsonify({'success': False, 'error': 'Video not found'}), 404
+        
+        video.likes = max(0, video.likes - 1)
+        db.commit()
+        
+        return jsonify({'success': True, 'likes': video.likes})
     finally:
         db.close()
 

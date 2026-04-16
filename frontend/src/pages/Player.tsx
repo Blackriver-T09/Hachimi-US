@@ -19,7 +19,8 @@ import {
   VolumeX,
   Repeat,
   Repeat1,
-  Shuffle
+  Shuffle,
+  ListPlus
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
@@ -28,6 +29,7 @@ interface Video {
   title: string
   source_url: string
   created_at: string
+  likes: number
 }
 
 const Player = () => {
@@ -44,6 +46,11 @@ const Player = () => {
   const [volume, _setVolume] = useState(1) // 0 to 1 (setVolume reserved for future volume slider)
   const [isMuted, setIsMuted] = useState(false)
   const [playMode, setPlayMode] = useState<'loop' | 'loop-one' | 'shuffle'>('loop') // loop all, loop one, shuffle
+  const [likedVideos, setLikedVideos] = useState<Set<number>>(() => {
+    // Load liked videos from localStorage
+    const saved = localStorage.getItem('likedVideos')
+    return saved ? new Set(JSON.parse(saved)) : new Set()
+  })
   
   // Session ID for online tracking
   const sessionIdRef = useRef<string>(
@@ -645,6 +652,35 @@ const Player = () => {
     setIsPlaying(true)
   }
 
+  const handleLike = async (videoId: number, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click
+    
+    const isLiked = likedVideos.has(videoId)
+    const endpoint = isLiked ? 'unlike' : 'like'
+    
+    try {
+      const response = await axios.post(`http://127.0.0.1:5000/api/videos/${videoId}/${endpoint}`)
+      if (response.data.success) {
+        // Update local liked state
+        const newLiked = new Set(likedVideos)
+        if (isLiked) {
+          newLiked.delete(videoId)
+        } else {
+          newLiked.add(videoId)
+        }
+        setLikedVideos(newLiked)
+        localStorage.setItem('likedVideos', JSON.stringify(Array.from(newLiked)))
+        
+        // Update video likes count in state
+        setVideos(videos.map(v => 
+          v.id === videoId ? { ...v, likes: response.data.likes } : v
+        ))
+      }
+    } catch (err) {
+      console.error('Failed to toggle like:', err)
+    }
+  }
+
   const playPrev = () => {
     if (!currentVideo || videos.length === 0) return
     
@@ -1169,7 +1205,28 @@ const Player = () => {
                     {video.title}
                   </h3>
                   <div className="flex justify-between items-center text-xs text-zinc-400 font-medium">
-                    <p className="truncate pr-2">Bilibili</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          // TODO: Add to playlist functionality
+                        }}
+                        className="p-1.5 rounded-full hover:bg-white/10 transition opacity-60 hover:opacity-100"
+                        title="Add to Playlist"
+                      >
+                        <ListPlus size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => handleLike(video.id, e)}
+                        className={`p-1.5 rounded-full hover:bg-white/10 transition flex items-center gap-1 ${
+                          likedVideos.has(video.id) ? 'text-red-400' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        title={likedVideos.has(video.id) ? 'Unlike' : 'Like'}
+                      >
+                        <Heart size={16} fill={likedVideos.has(video.id) ? 'currentColor' : 'none'} />
+                        <span className="text-xs">{video.likes}</span>
+                      </button>
+                    </div>
                     <span className="shrink-0 bg-black/30 px-2 py-1 rounded text-zinc-300">
                       {currentVideo?.id === video.id ? formatTime(durationRef.current) : '00:00'}
                     </span>

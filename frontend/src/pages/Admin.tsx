@@ -12,6 +12,7 @@ interface Video {
   source_url: string
   created_at: string
   duration?: number
+  likes: number
 }
 
 const Admin = () => {
@@ -320,6 +321,7 @@ const Admin = () => {
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-16">#</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Title</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-24">Duration</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-20">Likes</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-32">Source</th>
                   </tr>
                 </thead>
@@ -370,6 +372,12 @@ const Admin = () => {
                       </td>
                       <td className="py-3 px-4 text-zinc-400 font-mono text-sm">
                         {formatDuration(video.duration)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1 text-zinc-400">
+                          <span className="text-red-400">♥</span>
+                          <span className="font-medium">{video.likes}</span>
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <Button

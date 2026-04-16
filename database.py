@@ -12,6 +12,7 @@ class Video(Base):
     title = Column(String, nullable=False)
     source_url = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    likes = Column(Integer, default=0, nullable=False)
 
 class OnlineStats(Base):
     __tablename__ = 'online_stats'
