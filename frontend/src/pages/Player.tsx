@@ -403,6 +403,19 @@ const Player = () => {
     }
   }
 
+  // Hook for mouse tracking on buttons to create the radial gradient effect
+  const handleButtonMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const target = e.currentTarget;
+    const x = e.clientX - target.getBoundingClientRect().left;
+    const y = e.clientY - target.getBoundingClientRect().top;
+    
+    // Use requestAnimationFrame to prevent layout thrashing and lag
+    requestAnimationFrame(() => {
+      target.style.setProperty('--mouse-x', `${x}px`);
+      target.style.setProperty('--mouse-y', `${y}px`);
+    });
+  };
+
   const handleEnded = () => {
     setIsPlaying(false)
     if (videos.length === 0 || !currentVideo) return
@@ -501,6 +514,42 @@ const Player = () => {
             0% { opacity: 0; }
             100% { opacity: 1; }
           }
+          
+          /* Glow Button Hover Effect */
+          .glow-button {
+            position: relative;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.1);
+            transition: background-color 0.3s ease, transform 0.3s ease;
+          }
+          .glow-button:hover {
+            background-color: rgba(168, 85, 247, 0.9); /* Solid purple on hover */
+          }
+          .glow-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: inherit;
+            padding: 1.5px; /* Border thickness */
+            background: radial-gradient(
+              circle 40px at var(--mouse-x, 50%) var(--mouse-y, 50%), 
+              rgba(255, 255, 255, 0.9),
+              transparent 100%
+            );
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+          }
+          .glow-button:hover::before {
+            opacity: 1;
+          }
+          
           .custom-scrollbar::-webkit-scrollbar {
             width: 8px;
           }
@@ -673,9 +722,9 @@ const Player = () => {
               animationFillMode: 'forwards'
             } : {}}
           >
-            <div className="flex items-center gap-4 w-full bg-white/10 backdrop-blur-xl rounded-full px-6 py-3 border border-white/20 shadow-2xl">
-              <span className="text-sm font-mono text-white/70 w-12 text-right">{formatTime(progress)}</span>
-              <div className="flex-1 h-2 relative group cursor-pointer flex items-center">
+            <div className="flex items-center gap-6 w-full">
+              <span className="text-sm font-bold font-mono text-purple-400 w-12 text-right drop-shadow-md">{formatTime(progress)}</span>
+              <div className="flex-1 h-1.5 relative group cursor-pointer flex items-center">
                 <input 
                   type="range" 
                   min="0" 
@@ -684,18 +733,21 @@ const Player = () => {
                   onChange={handleProgressChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
-                <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden transition-all group-hover:h-2">
+                {/* Background track line */}
+                <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden transition-all group-hover:h-1.5 shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+                  {/* Filled track line */}
                   <div 
-                    className="h-full bg-purple-500 rounded-full shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                    className="h-full bg-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.8)] relative"
                     style={{ width: `${(progress / (duration || 1)) * 100}%` }}
                   ></div>
                 </div>
+                {/* Thumb/Handle */}
                 <div 
-                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 pointer-events-none"
-                  style={{ left: `calc(${(progress / (duration || 1)) * 100}% - 8px)` }}
+                  className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.9)] opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 pointer-events-none"
+                  style={{ left: `calc(${(progress / (duration || 1)) * 100}% - 7px)` }}
                 ></div>
               </div>
-              <span className="text-sm font-mono text-white/70 w-12">{formatTime(duration)}</span>
+              <span className="text-sm font-bold font-mono text-purple-400 w-12 drop-shadow-md">{formatTime(duration)}</span>
             </div>
           </div>
 
@@ -712,19 +764,22 @@ const Player = () => {
           >
             <button 
               onClick={playPrev} 
-              className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 text-white flex items-center justify-center hover:bg-white/20 hover:scale-110 transition-all shadow-2xl"
+              onMouseMove={handleButtonMouseMove}
+              className="glow-button w-14 h-14 rounded-full backdrop-blur-xl text-white flex items-center justify-center hover:scale-110 shadow-2xl"
             >
               <SkipBack size={24} fill="currentColor" />
             </button>
             <button 
               onClick={togglePlay}
-              className="w-18 h-18 p-5 rounded-full bg-white/15 backdrop-blur-xl border border-white/25 text-white flex items-center justify-center hover:bg-white/25 hover:scale-105 transition-all shadow-2xl"
+              onMouseMove={handleButtonMouseMove}
+              className="glow-button w-18 h-18 p-5 rounded-full backdrop-blur-xl text-white flex items-center justify-center hover:scale-105 shadow-2xl"
             >
               {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
             </button>
             <button 
               onClick={playNext} 
-              className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 text-white flex items-center justify-center hover:bg-white/20 hover:scale-110 transition-all shadow-2xl"
+              onMouseMove={handleButtonMouseMove}
+              className="glow-button w-14 h-14 rounded-full backdrop-blur-xl text-white flex items-center justify-center hover:scale-110 shadow-2xl"
             >
               <SkipForward size={24} fill="currentColor" />
             </button>
