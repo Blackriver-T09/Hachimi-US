@@ -64,7 +64,7 @@ const Player = () => {
   const viewModeRef = useRef<'browse' | 'playing'>('browse')
   // Store star positions in memory instead of reading from DOM
   const starPositions = useRef<{x: number, y: number, opacity: number, r: number, g: number, b: number, alpha: number}[]>(
-    Array.from({length: 64}, () => ({x: 200, y: 200, opacity: 0, r: 168, g: 85, b: 247, alpha: 0.5}))
+    Array.from({length: 64}, () => ({x: 0, y: 0, opacity: 0, r: 168, g: 85, b: 247, alpha: 0.5}))
   )
 
   const navigate = useNavigate()
@@ -332,8 +332,9 @@ const Player = () => {
           // Add slight angle jitter to break the perfect radial alignment
           const angleJitter = (Math.sin(i * 13) * 0.05) * intensity;
           const angle = (i / 64) * Math.PI * 2 - Math.PI / 2 + angleJitter;
-          const sx = 200 + Math.cos(angle) * starDist; // 200 is the center of the 400x400 SVG
-          const sy = 200 + Math.sin(angle) * starDist;
+          // Store relative coordinates (centered at 0,0), will add canvas offset when drawing
+          const sx = Math.cos(angle) * starDist;
+          const sy = Math.sin(angle) * starDist;
           
           // Only show active stars if they cross a certain height threshold to make it look like they "break free"
           const isActive = totalHeight > 30 && !isPaused;
@@ -368,7 +369,7 @@ const Player = () => {
           const ctx = canvas.getContext('2d');
           if (ctx) {
             // Clear canvas
-            ctx.clearRect(0, 0, 800, 800);
+            ctx.clearRect(0, 0, 1000, 1000);
             
             // Draw constellation lines
             ctx.strokeStyle = '#e9d5ff';
@@ -392,8 +393,8 @@ const Player = () => {
                   
                   if (dist < 150) {
                     ctx.beginPath();
-                    ctx.moveTo(curr.x + 200, curr.y + 200);
-                    ctx.lineTo(next.x + 200, next.y + 200);
+                    ctx.moveTo(curr.x + 500, curr.y + 500);
+                    ctx.lineTo(next.x + 500, next.y + 500);
                     ctx.stroke();
                     connectionsCount++;
                   }
@@ -415,7 +416,7 @@ const Player = () => {
               ctx.globalAlpha = star.opacity;
               ctx.fillStyle = `rgba(${star.r}, ${star.g}, ${star.b}, ${star.alpha})`;
               ctx.beginPath();
-              ctx.arc(star.x + 200, star.y + 200, radius, 0, Math.PI * 2);
+              ctx.arc(star.x + 500, star.y + 500, radius, 0, Math.PI * 2);
               ctx.fill();
             }
             
@@ -590,7 +591,7 @@ const Player = () => {
   }, []) // Empty deps: bars never need to be recreated
 
   return (
-    <div className="flex h-screen bg-[#1c1d25] text-zinc-300 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#1c1d25] text-zinc-300 font-sans overflow-hidden fixed inset-0">
       
       <style>
         {`
@@ -670,7 +671,7 @@ const Player = () => {
       </style>
 
       {/* Main Container - Absolute Positioning for Fullscreen Player */}
-      <div className={`absolute inset-0 z-50 flex flex-col bg-black transition-transform duration-500 ease-in-out ${viewMode === 'playing' ? 'translate-y-0 opacity-100 visible' : 'translate-y-full opacity-0 invisible'}`}>
+      <div className={`absolute inset-0 z-50 flex flex-col bg-black transition-transform duration-500 ease-in-out overflow-hidden ${viewMode === 'playing' ? 'translate-y-0 opacity-100 visible' : 'translate-y-full opacity-0 invisible'}`}>
         
         {/* Background Layer */}
         <div className="absolute inset-0 overflow-hidden">
@@ -697,7 +698,7 @@ const Player = () => {
         </div>
 
         {/* Content Layer */}
-        <div className="relative z-10 flex flex-col h-full p-8">
+        <div className="relative z-10 flex flex-col h-full p-4 sm:p-8 overflow-hidden">
           {/* Top Bar */}
           <div className="flex justify-between items-center w-full">
             <button 
@@ -741,10 +742,10 @@ const Player = () => {
           </div>
 
           {/* Center Area: Waveform / Info */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-visible">
             {bgMode === 'blur' && (
               <div 
-                className="relative w-[400px] h-[400px] flex items-center justify-center pointer-events-auto"
+                className="relative w-[min(90vw,400px)] h-[min(90vw,400px)] max-w-[400px] max-h-[400px] flex items-center justify-center pointer-events-auto"
                 style={showEntranceAnimation ? {
                   opacity: 0,
                   animationName: 'fadeInContent',
@@ -759,9 +760,9 @@ const Player = () => {
                 {/* Constellation Canvas Layer (replaces SVG for performance) */}
                 <canvas 
                   ref={constellationCanvasRef}
-                  width={800}
-                  height={800}
-                  className="absolute inset-[-200px] w-[800px] h-[800px] pointer-events-none z-10"
+                  width={1000}
+                  height={1000}
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] h-[250%] pointer-events-none z-10"
                   style={{ imageRendering: 'auto' }}
                 />
 
