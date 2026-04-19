@@ -109,7 +109,7 @@ const Player = () => {
     setIsLoadingVideos(true)
     const fetchVideos = async () => {
       try {
-        const response = await axios.get("http://127.0.0.1:5000/api/videos")
+        const response = await axios.get("/api/videos")
         if (response.data.success) {
           // Only store metadata, don't preload any media files here
           const videoList = response.data.data
@@ -117,7 +117,7 @@ const Player = () => {
           
           // Auto-play initial track if START_INDEX is configured
           try {
-            const configResponse = await axios.get("http://127.0.0.1:5000/api/config")
+            const configResponse = await axios.get("/api/config")
             if (configResponse.data.success && configResponse.data.start_index !== null) {
               const startIndex = configResponse.data.start_index
               // Find video by ID (not array index)
@@ -149,7 +149,7 @@ const Player = () => {
       } catch (err) {
         console.error("Failed to fetch videos:", err)
         setVideos([])
-        setVideosError("Backend is unavailable. Please start the server on 127.0.0.1:5000.")
+        setVideosError("Backend is unavailable. Please start the server on localhost:5000.")
       } finally {
         setIsLoadingVideos(false)
       }
@@ -159,7 +159,7 @@ const Player = () => {
     // Send heartbeat to track online users
     const sendHeartbeat = async () => {
       try {
-        await axios.post('http://127.0.0.1:5000/api/heartbeat', {
+        await axios.post('/api/heartbeat', {
           session_id: sessionIdRef.current
         })
       } catch (err) {
@@ -183,7 +183,7 @@ const Player = () => {
       audioRef.current.removeAttribute('src');
       audioRef.current.load();
       
-      audioRef.current.src = `http://127.0.0.1:5000/static/music/${currentVideo.id}.mp3`
+      audioRef.current.src = `/static/music/${currentVideo.id}.mp3`
       // Apply current volume settings
       audioRef.current.volume = isMuted ? 0 : volume
       
@@ -191,7 +191,7 @@ const Player = () => {
         videoRef.current.pause();
         videoRef.current.removeAttribute('src');
         videoRef.current.load();
-        videoRef.current.src = `http://127.0.0.1:5000/static/videos/${currentVideo.id}.mp4`
+        videoRef.current.src = `/static/videos/${currentVideo.id}.mp4`
       }
       
       if (isPlaying) {
@@ -215,7 +215,7 @@ const Player = () => {
 
   useEffect(() => {
     if (bgMode === 'video' && currentVideo && videoRef.current && audioRef.current) {
-      videoRef.current.src = `http://127.0.0.1:5000/static/videos/${currentVideo.id}.mp4`
+      videoRef.current.src = `/static/videos/${currentVideo.id}.mp4`
       videoRef.current.currentTime = audioRef.current.currentTime
       if (isPlaying) {
         videoRef.current.play().catch(e => console.error("Video play failed:", e))
@@ -690,7 +690,7 @@ const Player = () => {
     const endpoint = isLiked ? 'unlike' : 'like'
     
     try {
-      const response = await axios.post(`http://127.0.0.1:5000/api/videos/${videoId}/${endpoint}`)
+      const response = await axios.post(`/api/videos/${videoId}/${endpoint}`)
       if (response.data.success) {
         // Update local liked state
         const newLiked = new Set(likedVideos)
@@ -861,7 +861,7 @@ const Player = () => {
               <>
                 <div 
                   className="absolute inset-0 bg-cover bg-center opacity-40 scale-110 blur-xl transition-all duration-1000"
-                  style={{ backgroundImage: `url(http://127.0.0.1:5000/static/figures/${currentVideo.id}.jpg)` }}
+                  style={{ backgroundImage: `url(/static/figures/${currentVideo.id}.jpg)` }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
               </>
@@ -959,7 +959,7 @@ const Player = () => {
                   {currentVideo && (
                     <>
                       <img 
-                        src={`http://127.0.0.1:5000/static/figures/${currentVideo.id}.jpg`} 
+                        src={`/static/figures/${currentVideo.id}.jpg`} 
                         alt="" 
                         className="absolute inset-0 w-full h-full object-cover opacity-30" 
                       />
@@ -1257,7 +1257,7 @@ const Player = () => {
                 >
                   <div className="aspect-square mb-4 relative bg-black/50 rounded-xl overflow-hidden">
                     <img 
-                      src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`} 
+                      src={`/static/figures/${video.id}.jpg`} 
                       alt={video.title}
                       loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 will-change-transform"
@@ -1363,7 +1363,7 @@ const Player = () => {
                     }}>
                       <div className="w-32 h-32 rounded-2xl overflow-hidden mb-3 border-4 border-zinc-400 shadow-lg shadow-zinc-400/30">
                         <img 
-                          src={`http://127.0.0.1:5000/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[1].id}.jpg`}
+                          src={`/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[1].id}.jpg`}
                           alt="2nd place"
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                         />
@@ -1389,7 +1389,7 @@ const Player = () => {
                     }}>
                       <div className="w-40 h-40 rounded-2xl overflow-hidden mb-3 border-4 border-yellow-400 shadow-xl shadow-yellow-400/50 ring-4 ring-yellow-400/20">
                         <img 
-                          src={`http://127.0.0.1:5000/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[0].id}.jpg`}
+                          src={`/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[0].id}.jpg`}
                           alt="1st place"
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                         />
@@ -1415,7 +1415,7 @@ const Player = () => {
                     }}>
                       <div className="w-32 h-32 rounded-2xl overflow-hidden mb-3 border-4 border-amber-700 shadow-lg shadow-amber-700/30">
                         <img 
-                          src={`http://127.0.0.1:5000/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[2].id}.jpg`}
+                          src={`/static/figures/${[...videos].sort((a, b) => b.likes - a.likes)[2].id}.jpg`}
                           alt="3rd place"
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                         />
@@ -1449,7 +1449,7 @@ const Player = () => {
                 >
                   <div className="aspect-square rounded-xl overflow-hidden mb-4 relative bg-black/50">
                     <img 
-                      src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`} 
+                      src={`/static/figures/${video.id}.jpg`} 
                       alt={video.title}
                       loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
@@ -1583,7 +1583,7 @@ const Player = () => {
                           }}
                         >
                           <img 
-                            src={`http://127.0.0.1:5000/static/figures/${video.id}.jpg`}
+                            src={`/static/figures/${video.id}.jpg`}
                             alt={video.title}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                             onError={(e) => {
@@ -1666,7 +1666,7 @@ const Player = () => {
                 onClick={() => setViewMode('playing')}
               >
                 <img 
-                  src={`http://127.0.0.1:5000/static/figures/${currentVideo.id}.jpg`} 
+                  src={`/static/figures/${currentVideo.id}.jpg`} 
                   className="w-full h-full object-cover transition-transform group-hover:scale-110" 
                   alt="" 
                 />

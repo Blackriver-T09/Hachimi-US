@@ -15,11 +15,24 @@ interface Video {
   likes: number
 }
 
+interface ScrapeTask {
+  id: number
+  url: string
+  status: string
+  retry_count: number
+  max_retries: number
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  video_id: number | null
+}
+
 const Admin = () => {
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{success: boolean, msg: string, data?: any} | null>(null)
   const [videos, setVideos] = useState<Video[]>([])
+  const [scrapeTasks, setScrapeTasks] = useState<ScrapeTask[]>([])
   const [onlineUsers, setOnlineUsers] = useState(0)
   const [peakToday, setPeakToday] = useState(0)
   const [statsHistory, setStatsHistory] = useState<{timestamp: string, online_count: number}[]>([])
@@ -37,13 +50,14 @@ const Admin = () => {
 
   useEffect(() => {
     fetchVideos()
+    fetchScrapeTasks()
     fetchOnlineUsers()
     fetchStatsHistory()
     
     // Send heartbeat to track online users
     const sendHeartbeat = async () => {
       try {
-        await axios.post('http://127.0.0.1:5000/api/heartbeat', {
+        await axios.post('/api/heartbeat', {
           session_id: sessionId
         })
       } catch (err) {
@@ -57,6 +71,7 @@ const Admin = () => {
     const interval = setInterval(() => {
       fetchOnlineUsers()
       sendHeartbeat()
+      fetchScrapeTasks() // Also refresh scrape tasks
     }, 10000)
     
     // Refresh history every 5 minutes
@@ -70,7 +85,7 @@ const Admin = () => {
 
   const fetchVideos = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:5000/api/videos")
+      const response = await axios.get("/api/videos")
       if (response.data.success) {
         setVideos(response.data.data)
       }
@@ -79,9 +94,23 @@ const Admin = () => {
     }
   }
 
+  const fetchScrapeTasks = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await axios.get("/api/scrape/queue/tasks?limit=10", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (response.data.success) {
+        setScrapeTasks(response.data.tasks)
+      }
+    } catch (err) {
+      console.error("Failed to fetch scrape tasks:", err)
+    }
+  }
+
   const fetchOnlineUsers = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:5000/api/stats/online")
+      const response = await axios.get("/api/stats/online")
       if (response.data.success) {
         setOnlineUsers(response.data.count)
         setPeakToday(response.data.peak_today || 0)
@@ -93,7 +122,7 @@ const Admin = () => {
 
   const fetchStatsHistory = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:5000/api/stats/history?hours=24")
+      const response = await axios.get("/api/stats/history?hours=24")
       if (response.data.success) {
         setStatsHistory(response.data.data)
       }
@@ -119,7 +148,7 @@ const Admin = () => {
       const token = localStorage.getItem("token")
       const extractedUrl = extractUrl(url.trim())
       const response = await axios.post(
-        "http://127.0.0.1:5000/api/scrape", 
+        "/api/scrape", 
         { url: extractedUrl },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -127,11 +156,11 @@ const Admin = () => {
       if (response.data.success) {
         setResult({
           success: true,
-          msg: "Video scraped successfully!",
-          data: response.data.data
+          msg: "Task added to queue successfully!",
+          data: { id: response.data.task_id, title: "Processing..." }
         })
         setUrl("")
-        fetchVideos() // Refresh video list
+        fetchScrapeTasks() // Refresh scrape queue
       }
     } catch (err: any) {
       if (err.response?.status === 401) {
@@ -166,7 +195,7 @@ const Admin = () => {
     try {
       const token = localStorage.getItem("token")
       await axios.put(
-        `http://127.0.0.1:5000/api/videos/${id}`,
+        `/api/videos/${id}`,
         { title: newTitle },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -307,6 +336,61 @@ const Admin = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Scrape Queue */}
+        {scrapeTasks.length > 0 && (
+          <Card className="bg-zinc-900 border-zinc-800 text-zinc-100">
+            <CardHeader>
+              <CardTitle>Scrape Queue (Recent 10 tasks)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {scrapeTasks.map((task) => {
+                  const statusColors = {
+                    'in_queue': 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+                    'scraping': 'bg-purple-500/10 border-purple-500/30 text-purple-400',
+                    'waiting': 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+                    'finished': 'bg-green-500/10 border-green-500/30 text-green-400',
+                    'failed': 'bg-red-500/10 border-red-500/30 text-red-400'
+                  }
+                  
+                  const statusIcons = {
+                    'in_queue': '⏳',
+                    'scraping': '🔄',
+                    'waiting': '⏸️',
+                    'finished': '✅',
+                    'failed': '❌'
+                  }
+                  
+                  return (
+                    <div key={task.id} className={`p-4 rounded-lg border ${statusColors[task.status as keyof typeof statusColors] || 'bg-zinc-800 border-zinc-700'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">{statusIcons[task.status as keyof typeof statusIcons] || '📝'}</span>
+                            <span className="font-medium capitalize">{task.status.replace('_', ' ')}</span>
+                            <span className="text-xs text-zinc-500">#{task.id}</span>
+                          </div>
+                          <p className="text-sm text-zinc-400 truncate mb-1">{task.url}</p>
+                          {task.error_message && (
+                            <p className="text-xs text-red-400 mt-1">Error: {task.error_message}</p>
+                          )}
+                          {task.video_id && (
+                            <p className="text-xs text-green-400 mt-1">✓ Created video ID: {task.video_id}</p>
+                          )}
+                        </div>
+                        <div className="text-right text-xs text-zinc-500 flex-shrink-0">
+                          <div>Retry: {task.retry_count}/{task.max_retries}</div>
+                          <div className="mt-1">{new Date(task.updated_at).toLocaleTimeString()}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Music Library Table */}
         <Card className="bg-zinc-900 border-zinc-800 text-zinc-100">

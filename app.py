@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from scraper import scrape_bilibili
-from database import SessionLocal, Video
+from database import SessionLocal, Video, ScrapeTask
 from online_tracker import tracker
+from scrape_queue import get_scrape_queue
 import traceback
 import os
 import jwt
@@ -12,6 +13,7 @@ import mutagen
 import threading
 import time as time_module
 import subprocess
+import logging
 
 app = Flask(__name__)
 
@@ -216,42 +218,70 @@ def serve_static(folder, filename):
 @app.route('/api/scrape', methods=['POST'])
 @token_required
 def handle_scrape():
+    """Add URL to scrape queue instead of immediate scraping"""
     data = request.json
     if not data or 'url' not in data:
         return jsonify({'success': False, 'error': 'No URL provided'}), 400
         
     url = data['url']
+    max_retries = data.get('max_retries', 3)
     
-    # Check if URL already exists in database
+    # Add to queue
+    queue = get_scrape_queue()
+    result = queue.add_task(url, max_retries=max_retries)
+    
+    if result['success']:
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 409 if 'already exists' in result['message'] else 400
+
+@app.route('/api/scrape/queue/stats', methods=['GET'])
+@token_required
+def get_queue_stats():
+    """Get scrape queue statistics"""
+    queue = get_scrape_queue()
+    stats = queue.get_queue_stats()
+    return jsonify({'success': True, 'stats': stats})
+
+@app.route('/api/scrape/queue/tasks', methods=['GET'])
+@token_required
+def get_queue_tasks():
+    """Get all tasks in queue"""
+    status = request.args.get('status')
+    limit = request.args.get('limit', 50, type=int)
+    
+    queue = get_scrape_queue()
+    tasks = queue.get_all_tasks(status=status, limit=limit)
+    
+    return jsonify({'success': True, 'tasks': tasks})
+
+@app.route('/api/scrape/queue/task/<int:task_id>', methods=['GET'])
+@token_required
+def get_task_detail(task_id):
+    """Get specific task details"""
     db = SessionLocal()
     try:
-        existing_video = db.query(Video).filter(Video.source_url == url).first()
-        if existing_video:
-            return jsonify({
-                'success': False,
-                'error': f'This video has already been added (ID: {existing_video.id}, Title: {existing_video.title})',
-                'existing': {
-                    'id': existing_video.id,
-                    'title': existing_video.title,
-                    'created_at': existing_video.created_at.isoformat()
-                }
-            }), 409  # 409 Conflict
-    finally:
-        db.close()
-    
-    # Proceed with scraping if URL is new
-    try:
-        result = scrape_bilibili(url)
+        task = db.query(ScrapeTask).filter_by(id=task_id).first()
+        if not task:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+        
         return jsonify({
             'success': True,
-            'data': result
+            'task': {
+                'id': task.id,
+                'url': task.url,
+                'status': task.status,
+                'retry_count': task.retry_count,
+                'max_retries': task.max_retries,
+                'error_message': task.error_message,
+                'created_at': task.created_at.isoformat() if task.created_at else None,
+                'updated_at': task.updated_at.isoformat() if task.updated_at else None,
+                'next_retry_at': task.next_retry_at.isoformat() if task.next_retry_at else None,
+                'video_id': task.video_id
+            }
         })
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    finally:
+        db.close()
 
 def stats_logger_thread():
     """Background thread to log stats every 5 minutes"""
@@ -265,13 +295,32 @@ def stats_logger_thread():
         # Wait 5 minutes
         time_module.sleep(300)
 
+def scrape_queue_thread():
+    """Background thread for scrape queue processing"""
+    queue = get_scrape_queue(
+        check_interval=10,    # Check every 10 seconds
+        base_wait_time=60     # Base wait time: 60 seconds
+    )
+    queue.run_background_loop()
+
 if __name__ == '__main__':
     from database import init_db
     init_db()
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     
     # Start stats logging thread
     logger_thread = threading.Thread(target=stats_logger_thread, daemon=True)
     logger_thread.start()
     print("✓ Stats logging thread started (every 5 minutes)")
     
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # Start scrape queue thread
+    queue_thread = threading.Thread(target=scrape_queue_thread, daemon=True)
+    queue_thread.start()
+    print("✓ Scrape queue thread started (checks every 10 seconds)")
+    
+    app.run(host='0.0.0.0', port=5000, debug=True)
