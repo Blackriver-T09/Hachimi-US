@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { LogOut, Loader2, CheckCircle2, XCircle, ExternalLink, Edit2, Check, X, Users } from "lucide-react"
+import { LogOut, Loader2, CheckCircle2, XCircle, ExternalLink, Edit2, Check, X, Users, Trash2 } from "lucide-react"
 import axios from "axios"
 
 interface Video {
@@ -203,6 +203,37 @@ const Admin = () => {
       setEditingId(null)
     } catch (err) {
       console.error("Failed to update title:", err)
+    }
+  }
+
+  const handleDelete = async (id: number, title: string) => {
+    if (!confirm(`确定要删除《${title}》吗？\n\n这将删除所有相关文件（音频、视频、封面、弹幕）和数据库记录，此操作不可恢复！`)) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await axios.delete(
+        `/api/videos/${id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      if (response.data.success) {
+        setVideos(videos.filter(v => v.id !== id))
+        setResult({
+          success: true,
+          msg: `✓ 已删除《${title}》及其所有文件`
+        })
+      }
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        handleLogout()
+        return
+      }
+      setResult({
+        success: false,
+        msg: err.response?.data?.error || "删除失败"
+      })
     }
   }
 
@@ -407,6 +438,7 @@ const Admin = () => {
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-24">Duration</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-20">Likes</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-32">Source</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-24">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -471,6 +503,16 @@ const Admin = () => {
                           className="h-8 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-purple-400 flex items-center gap-2"
                         >
                           <ExternalLink className="w-3 h-3" /> Bilibili
+                        </Button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(video.id, video.title)}
+                          className="h-8 border-red-900/50 text-red-400 hover:bg-red-950 hover:border-red-800 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </td>
                     </tr>

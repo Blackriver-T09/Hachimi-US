@@ -179,6 +179,48 @@ def unlike_video(video_id):
     finally:
         db.close()
 
+@app.route('/api/videos/<int:video_id>', methods=['DELETE'])
+@token_required
+def delete_video(video_id):
+    """Delete a video and all associated files"""
+    db = SessionLocal()
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            return jsonify({'success': False, 'error': 'Video not found'}), 404
+        
+        # Delete associated files
+        files_to_delete = [
+            os.path.join(app.root_path, 'music', f'{video_id}.mp3'),
+            os.path.join(app.root_path, 'figures', f'{video_id}.jpg'),
+            os.path.join(app.root_path, 'videos', f'{video_id}.mp4'),
+            os.path.join(app.root_path, 'bullet', f'{video_id}.xml'),
+        ]
+        
+        deleted_files = []
+        for file_path in files_to_delete:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    deleted_files.append(os.path.basename(file_path))
+                except Exception as e:
+                    print(f"Warning: Failed to delete {file_path}: {e}")
+        
+        # Delete from database
+        db.delete(video)
+        db.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Video {video_id} deleted',
+            'deleted_files': deleted_files
+        })
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
 @app.route('/api/stats/online', methods=['GET'])
 def get_online_users():
     """Get current online user count with peak"""
