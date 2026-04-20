@@ -25,3 +25,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+
+# Service files
+*.pid
+logs/

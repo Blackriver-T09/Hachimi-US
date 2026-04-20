@@ -133,6 +133,44 @@ The frontend will run on `http://localhost:5173`
 
 前端将运行在 `http://localhost:5173`
 
+#### 4. Service Management / 服务管理（推荐）
+
+**Install as System Service / 安装为系统服务**
+
+```bash
+# Install service / 安装服务
+./install-service.sh
+
+# Start service / 启动服务
+sudo systemctl start hachimi
+
+# Stop service / 停止服务
+sudo systemctl stop hachimi
+
+# Check status / 查看状态
+sudo systemctl status hachimi
+```
+
+**Or use scripts directly / 或直接使用脚本**
+
+```bash
+# Start / 启动
+./start.sh
+
+# Stop / 停止
+./stop.sh
+
+# Restart / 重启
+./restart.sh
+
+# Status / 状态
+./status.sh
+```
+
+📖 **See [SERVICE.md](SERVICE.md) for detailed service management guide**
+
+📖 **详细的服务管理指南请查看 [SERVICE.md](SERVICE.md)**
+
 ---
 
 ## 📖 Usage / 使用说明

@@ -1,0 +1,23 @@
+[Unit]
+Description=Hachimi Music Platform Service
+After=network.target
+
+[Service]
+Type=forking
+User=heihe
+Group=heihe
+WorkingDirectory=/home/heihe/Hachimi
+ExecStart=/bin/bash /home/heihe/Hachimi/start.sh
+ExecStop=/bin/bash /home/heihe/Hachimi/stop.sh
+ExecReload=/bin/bash /home/heihe/Hachimi/restart.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="NODE_ENV=production"
+
+[Install]
+WantedBy=multi-user.target
