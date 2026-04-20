@@ -60,10 +60,23 @@ const Player = () => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   
-  // Session ID for online tracking
-  const sessionIdRef = useRef<string>(
-    `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-  )
+  // Session ID for online tracking - shared across all tabs in same browser
+  const getOrCreateSessionId = () => {
+    // Try to get existing session ID from localStorage
+    let sessionId = localStorage.getItem('hachimi_session_id')
+    if (!sessionId) {
+      // Generate new session ID with browser fingerprint
+      const browserFingerprint = `${navigator.userAgent}_${screen.width}x${screen.height}_${navigator.language}`
+      const hash = browserFingerprint.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0)
+        return a & a
+      }, 0)
+      sessionId = `session_${Math.abs(hash)}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      localStorage.setItem('hachimi_session_id', sessionId)
+    }
+    return sessionId
+  }
+  const sessionIdRef = useRef<string>(getOrCreateSessionId())
   
   // DOM Refs for direct updates to bypass React re-renders
   const progressLineRef = useRef<HTMLDivElement>(null)
@@ -171,9 +184,15 @@ const Player = () => {
     sendHeartbeat()
     
     // Send heartbeat every 10 seconds
+    // All tabs with same session ID will send heartbeats
+    // User is considered online as long as ANY tab is sending heartbeats
     const heartbeatInterval = setInterval(sendHeartbeat, 10000)
     
-    return () => clearInterval(heartbeatInterval)
+    return () => {
+      clearInterval(heartbeatInterval)
+      // Don't send offline signal - let session timeout naturally
+      // This way, if user has other tabs open, they stay online
+    }
   }, [])
 
   useEffect(() => {
@@ -1152,7 +1171,7 @@ const Player = () => {
       {/* ---------------- BROWSE VIEW LAYOUT ---------------- */}
       
       {/* Sidebar - Hidden on mobile */}
-      <aside className="hidden md:flex w-64 bg-[#1f2129] flex-col pt-8 shrink-0 relative z-20">
+      <aside className="hidden md:flex md:flex-col w-64 bg-[#1f2129] pt-8 shrink-0 relative z-20">
         <div className="px-8 pb-8 flex items-center gap-3 font-bold text-xl text-white cursor-pointer" onClick={() => setViewMode('browse')}>
           <img 
             src="/logo.png" 

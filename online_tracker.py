@@ -44,6 +44,18 @@ class OnlineTracker:
             # Clean up old sessions
             self._cleanup_memory_sessions()
     
+    def remove_session(self, session_id: str):
+        """
+        Explicitly remove a session (when user closes page)
+        """
+        if self.use_redis:
+            key = f"session:{session_id}"
+            self.redis_client.delete(key)
+        else:
+            # Fallback: remove from memory
+            if session_id in self.memory_sessions:
+                del self.memory_sessions[session_id]
+    
     def get_online_count(self) -> int:
         """Get the current number of online users"""
         if self.use_redis:

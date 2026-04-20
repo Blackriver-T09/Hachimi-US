@@ -40,8 +40,21 @@ const Admin = () => {
   const [editTitle, setEditTitle] = useState("")
   const navigate = useNavigate()
   
-  // Session ID for online tracking
-  const sessionId = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+  // Session ID for online tracking - shared across all tabs
+  const getOrCreateSessionId = () => {
+    let sessionId = localStorage.getItem('hachimi_session_id')
+    if (!sessionId) {
+      const browserFingerprint = `${navigator.userAgent}_${screen.width}x${screen.height}_${navigator.language}`
+      const hash = browserFingerprint.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0)
+        return a & a
+      }, 0)
+      sessionId = `session_${Math.abs(hash)}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      localStorage.setItem('hachimi_session_id', sessionId)
+    }
+    return sessionId
+  }
+  const sessionId = getOrCreateSessionId()
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -80,6 +93,7 @@ const Admin = () => {
     return () => {
       clearInterval(interval)
       clearInterval(historyInterval)
+      // Don't send offline signal - let session timeout naturally
     }
   }, [])
 

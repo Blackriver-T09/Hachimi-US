@@ -251,6 +251,29 @@ def heartbeat():
     tracker.update_peak()  # Update peak count
     return jsonify({'success': True})
 
+@app.route('/api/offline', methods=['POST'])
+def offline():
+    """Mark a user session as offline"""
+    # Handle both JSON and sendBeacon (text/plain) formats
+    try:
+        if request.is_json:
+            data = request.json
+        else:
+            # sendBeacon sends as text/plain
+            import json
+            data = json.loads(request.data.decode('utf-8'))
+        
+        session_id = data.get('session_id')
+        
+        if not session_id:
+            return jsonify({'success': False, 'error': 'No session_id provided'}), 400
+        
+        tracker.remove_session(session_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error in offline endpoint: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+
 @app.route('/static/<folder>/<filename>')
 def serve_static(folder, filename):
     if folder not in ['figures', 'music', 'videos', 'bullet']:
