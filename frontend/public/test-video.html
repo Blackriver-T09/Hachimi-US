@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Mambo Dance WebM</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1c1d25;
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #a855f7;
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+        }
+        .video-box {
+            text-align: center;
+        }
+        video {
+            max-width: 300px;
+            border: 2px solid #a855f7;
+            border-radius: 8px;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid #a855f7;
+            border-radius: 8px;
+            max-width: 400px;
+        }
+        .sidebar-demo {
+            width: 250px;
+            background: #16171d;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .sidebar-demo h3 {
+            color: #a855f7;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .sidebar-demo video {
+            width: 100%;
+            border: none;
+            border-radius: 0;
+        }
+        .button {
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        .button.active {
+            background: rgba(168, 85, 247, 0.2);
+            color: white;
+            border-left: 2px solid #a855f7;
+        }
+    </style>
+</head>
+<body>
+    <h1>🕺 Mambo Dance WebM Test</h1>
+    
+    <div class="container">
+        <div class="video-box">
+            <h2>Full Size Preview</h2>
+            <video src="/mambo_dance.webm" autoplay loop muted playsinline id="video"></video>
+            <div class="info">
+                <p id="status">Loading video...</p>
+                <p style="margin-top: 10px; font-size: 12px; color: #9ca3af;">
+                    WebM format with transparent background
+                </p>
+            </div>
+        </div>
+
+        <div class="sidebar-demo">
+            <h3>Sidebar Preview</h3>
+            <div class="button">🔲 Browse</div>
+            <div class="button">▶ Now Playing</div>
+            <div class="button">☰ Playlists</div>
+            <div class="button active">❤️ Favorites</div>
+            <div style="margin-top: 15px;">
+                <video src="/mambo_dance.webm" autoplay loop muted playsinline></video>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+
+        video.onloadeddata = () => {
+            status.textContent = '✅ WebM video loaded successfully!';
+            status.style.color = '#4ade80';
+        };
+
+        video.onerror = () => {
+            status.textContent = '❌ Failed to load WebM video';
+            status.style.color = '#ef4444';
+        };
+    </script>
+</body>
+</html>

@@ -1183,6 +1183,24 @@ const Player = () => {
               </div>
               <span className="font-medium">Favorites</span>
             </button>
+
+            {/* Mambo Dance Animation - Below Favorites */}
+            <div className="w-full flex justify-center items-center mt-6 px-4">
+              <video 
+                src="/mambo_dance.webm" 
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-[85%] h-auto border-0 outline-none"
+                style={{ border: 'none', outline: 'none' }}
+                onError={(e) => {
+                  console.error('Failed to load mambo_dance.webm')
+                  e.currentTarget.style.display = 'none'
+                }}
+                onLoadedData={() => console.log('✅ Mambo dance video loaded in sidebar')}
+              />
+            </div>
           </div>
         </nav>
       </aside>
