@@ -238,6 +238,31 @@ const Player = () => {
     }
   }, [viewMode])
 
+  // Spacebar keyboard event for play/pause
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Only handle spacebar when not typing in an input field
+      if (e.code === 'Space' && e.target instanceof HTMLElement && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault() // Prevent page scroll
+        
+        if (currentVideo && audioRef.current) {
+          if (isPlaying) {
+            audioRef.current.pause()
+            setIsPlaying(false)
+          } else {
+            audioRef.current.play().catch(err => {
+              console.error('Playback failed:', err)
+            })
+            setIsPlaying(true)
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [currentVideo, isPlaying])
+
   const setupAudioAnalyzer = () => {
     if (!audioRef.current) return;
 
@@ -1126,8 +1151,8 @@ const Player = () => {
 
       {/* ---------------- BROWSE VIEW LAYOUT ---------------- */}
       
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#1f2129] flex flex-col pt-8 shrink-0 relative z-20">
+      {/* Sidebar - Hidden on mobile */}
+      <aside className="hidden md:flex w-64 bg-[#1f2129] flex-col pt-8 shrink-0 relative z-20">
         <div className="px-8 pb-8 flex items-center gap-3 font-bold text-xl text-white cursor-pointer" onClick={() => setViewMode('browse')}>
           <img 
             src="/logo.png" 
@@ -1209,7 +1234,7 @@ const Player = () => {
       <main className="flex-1 flex flex-col h-full relative z-10 bg-[#1c1d25] pb-28">
         
         {/* Header */}
-        <header className="h-24 px-10 flex items-center justify-between shrink-0 w-full">
+        <header className="h-20 md:h-24 px-4 md:px-10 flex items-center justify-between shrink-0 w-full">
           <div className="flex-1 max-w-2xl relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
             <Input 
@@ -1252,12 +1277,12 @@ const Player = () => {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar text-left w-full max-w-7xl mx-auto">
+        <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-10 custom-scrollbar text-left w-full max-w-7xl mx-auto">
           {viewMode === 'browse' && (
             <div className="mb-12 text-left">
               <div className="flex justify-between items-end mb-8 text-left">
-                <h2 className="text-3xl font-bold text-white tracking-tight">Music Library</h2>
-                <button className="text-sm font-medium text-purple-400 hover:text-purple-300 transition">See all</button>
+                <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Music Library</h2>
+                <button className="text-sm font-medium text-purple-400 hover:text-purple-300 transition hidden md:inline-block">See all</button>
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 text-left">
@@ -1364,7 +1389,7 @@ const Player = () => {
           {viewMode === 'favorites' && (
             <div className="mb-12 text-left">
               <div className="flex justify-between items-end mb-8 text-left animate-[float-up_0.6s_ease-out]">
-                <h2 className="text-3xl font-bold text-white tracking-tight">Top Favorites</h2>
+                <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Top Favorites</h2>
                 <span className="text-sm font-medium text-zinc-400">{videos.length} songs</span>
               </div>
 
@@ -1517,7 +1542,7 @@ const Player = () => {
           {viewMode === 'playlists' && (
             <div className="mb-12 text-left">
               <div className="flex justify-between items-end mb-8 text-left animate-[float-up_0.6s_ease-out]">
-                <h2 className="text-3xl font-bold text-white tracking-tight">My Playlist</h2>
+                <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">My Playlist</h2>
                 <span className="text-sm font-medium text-zinc-400">{playlist.length} songs</span>
               </div>
 
